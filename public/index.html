@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Ghi nhận số lượng</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Khung chính của toàn bộ màn hình nhập liệu. -->
+    <main class="shell">
+      <!-- Màn hình đăng nhập nội bộ, đúng tài khoản mới hiện form nhập liệu. -->
+      <section id="loginPanel" class="panel login-panel">
+        <div class="topbar">
+          <div>
+            <h1>Đăng nhập</h1>
+            <p>Nhập tài khoản được cấp để ghi nhận số lượng.</p>
+          </div>
+        </div>
+
+        <form id="loginForm" class="form">
+          <label>
+            Tài khoản
+            <input id="loginUsername" name="username" autocomplete="username" required />
+          </label>
+          <label>
+            Mật khẩu
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary" type="submit">Đăng nhập</button>
+          <div id="loginResult" class="result" role="status"></div>
+        </form>
+      </section>
+
+      <!-- Panel trắng chứa tiêu đề và form. -->
+      <section id="appPanel" class="panel hidden">
+        <!-- Thanh đầu trang: tiêu đề, trạng thái tải khách, nút tải khách. -->
+        <div class="topbar">
+          <div>
+            <h1>Ghi nhận số lượng</h1>
+            <p id="sheetStatus">Sẵn sàng ghi nhận số lượng</p>
+            <p id="loginStatus" class="login-status"></p>
+          </div>
+          <div class="top-actions">
+            <button id="reloadCustomers" type="button">Tải khách</button>
+            <button id="logoutButton" type="button">Đăng xuất</button>
+          </div>
+        </div>
+
+        <!-- Form gửi dữ liệu lên /api/orders. -->
+        <form id="orderForm" class="form">
+          <!-- Email người nhập, được lưu lại bằng localStorage trên điện thoại. -->
+          <label>
+            Email người nhập
+            <input id="userEmail" name="userEmail" type="email" autocomplete="email" required />
+          </label>
+
+          <!-- Mã khách dùng để tra trong tab DanhSachKhach. -->
+          <label>
+            Mã khách
+            <input id="customerCode" name="customerCode" list="customerCodes" autocomplete="off" required />
+            <datalist id="customerCodes"></datalist>
+          </label>
+
+          <!-- Dòng xác nhận tên khách sau khi nhập mã. -->
+          <div class="customer-preview" id="customerPreview">Nhập mã khách để tra thông tin.</div>
+
+          <!-- Ô ngày: hiển thị ngày ngắn, nhưng vẫn dùng input date để bấm ra lịch. -->
+          <label>
+            Ngày đặt
+            <span class="date-field">
+              <span id="orderDateText" class="date-text">30/5/26</span>
+              <input id="orderDate" name="orderDate" type="hidden" required />
+              <input id="orderDatePicker" class="date-picker" type="date" aria-label="Ngày đặt" />
+            </span>
+          </label>
+
+          <!-- Ba ô số lượng chính, luôn hiện để nhập nhanh trên điện thoại. -->
+          <div class="grid primary-items">
+            <label>
+              Mì kg
+              <input name="miKg" inputmode="decimal" placeholder="0" />
+            </label>
+            <label>
+              Da cảo kg
+              <input name="caoKg" inputmode="decimal" placeholder="0" />
+            </label>
+            <label>
+              Da hoành kg
+              <input name="hoanhKg" inputmode="decimal" placeholder="0" />
+            </label>
+          </div>
+
+          <!-- Các ô ít dùng được gom vào details để bấm mở khi cần. -->
+          <details class="optional-items">
+            <summary>Thông tin thêm</summary>
+            <div class="grid">
+            <label>
+              Hủ tiếu
+              <input name="huTieu" inputmode="decimal" placeholder="0" />
+            </label>
+            <label>
+              Vỏ bánh gối
+              <input name="voBanhGoi" inputmode="decimal" placeholder="0" />
+            </label>
+            </div>
+          </details>
+
+          <!-- Nhà xe: có thể tự điền từ khách, hoặc người nhập sửa lại. -->
+          <label>
+            Nhà xe
+            <input name="nhaXe" id="nhaXe" list="nhaXeList" autocomplete="off" />
+            <datalist id="nhaXeList">
+              <option value="Huệ Nghĩa"></option>
+              <option value="Tư Nhiều"></option>
+              <option value="bảy"></option>
+              <option value="nghỉ"></option>
+            </datalist>
+          </label>
+
+          <!-- Ghi chú nội bộ, tách riêng với nhà xe. -->
+          <label>
+            Ghi chú
+            <textarea name="ghiChu" rows="3"></textarea>
+          </label>
+
+          <!-- Nút submit form. -->
+          <button class="primary" type="submit">Lưu</button>
+          <!-- Nơi hiện thông báo thành công/lỗi. -->
+          <div id="result" class="result" role="status"></div>
+        </form>
+      </section>
+    </main>
+    <!-- File JavaScript xử lý form, tải khách, gọi API. -->
+    <script src="/app.js"></script>
+  </body>
+</html>

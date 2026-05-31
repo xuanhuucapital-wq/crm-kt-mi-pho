@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Poster giải thích dự án ghi nhận số lượng</title>
+  <desc id="desc">Sơ đồ 16:9 mô tả luồng website nhập số lượng, backend Netlify Functions và Google Sheet.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0c1f2f"/>
+      <stop offset="1" stop-color="#10251f"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000000" flood-opacity="0.34"/>
+    </filter>
+    <marker id="arrow" markerWidth="18" markerHeight="18" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L12,6 L2,10 Z" fill="#2dd4bf"/>
+    </marker>
+    <style>
+      .title { font: 800 68px Inter, Arial, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 500 28px Inter, Arial, sans-serif; fill: #a8b3c5; }
+      .card-title { font: 800 34px Inter, Arial, sans-serif; fill: #f8fafc; }
+      .card-text { font: 500 23px Inter, Arial, sans-serif; fill: #a8b3c5; }
+      .small { font: 650 22px Inter, Arial, sans-serif; fill: #5eead4; }
+      .pill { font: 750 21px Inter, Arial, sans-serif; fill: #dffcf8; }
+      .label { font: 800 24px Inter, Arial, sans-serif; fill: #f8fafc; }
+      .note { font: 600 22px Inter, Arial, sans-serif; fill: #cad5e5; }
+      .white { fill: #fff; }
+      .line { stroke: #2dd4bf; stroke-width: 6; fill: none; marker-end: url(#arrow); }
+      .card { fill: #101d2d; stroke: #26394f; stroke-width: 2; }
+      .soft-panel { fill: #0f1b2a; stroke: #26394f; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect x="60" y="54" width="1800" height="972" rx="36" fill="#07111f" opacity="0.78" stroke="#1d3448" stroke-width="2"/>
+
+  <text x="110" y="140" class="title">Ghi nhận số lượng hàng hóa</text>
+  <text x="112" y="188" class="subtitle">Website giúp nhân viên nhập số lượng nhanh, Google Sheet tự tính tiền và lưu lịch sử.</text>
+
+  <g transform="translate(112 250)">
+    <rect width="328" height="230" rx="22" class="card" filter="url(#shadow)"/>
+    <circle cx="62" cy="66" r="34" fill="#123f3a"/>
+    <path d="M50 68h24M62 56v24" stroke="#5eead4" stroke-width="8" stroke-linecap="round"/>
+    <text x="34" y="134" class="card-title">1. Nhân viên</text>
+    <text x="34" y="176" class="card-text">Nhập mã khách, ngày,</text>
+    <text x="34" y="207" class="card-text">mì kg, cảo kg, nhà xe.</text>
+  </g>
+
+  <path d="M468 365 C535 365 560 365 625 365" class="line"/>
+
+  <g transform="translate(640 250)">
+    <rect width="328" height="230" rx="22" class="card" filter="url(#shadow)"/>
+    <circle cx="62" cy="66" r="34" fill="#152b55"/>
+    <rect x="42" y="48" width="40" height="36" rx="6" fill="#60a5fa"/>
+    <rect x="48" y="55" width="28" height="6" rx="3" fill="#ffffff"/>
+    <rect x="48" y="67" width="20" height="6" rx="3" fill="#ffffff"/>
+    <text x="34" y="134" class="card-title">2. Website</text>
+    <text x="34" y="176" class="card-text">Tra mã khách, kiểm tra</text>
+    <text x="34" y="207" class="card-text">dữ liệu trước khi lưu.</text>
+  </g>
+
+  <path d="M996 365 C1063 365 1088 365 1153 365" class="line"/>
+
+  <g transform="translate(1168 250)">
+    <rect width="328" height="230" rx="22" class="card" filter="url(#shadow)"/>
+    <circle cx="62" cy="66" r="34" fill="#523716"/>
+    <path d="M48 76c0-18 9-30 24-30 12 0 22 9 22 22 0 15-12 26-30 26H48z" fill="#fbbf24"/>
+    <text x="34" y="134" class="card-title">3. Backend API</text>
+    <text x="34" y="176" class="card-text">Giữ key Google an toàn,</text>
+    <text x="34" y="207" class="card-text">không lộ trên trình duyệt.</text>
+  </g>
+
+  <path d="M1498 365 C1538 365 1558 365 1598 365" class="line"/>
+
+  <g transform="translate(1610 250)">
+    <rect width="250" height="230" rx="22" class="card" filter="url(#shadow)"/>
+    <circle cx="62" cy="66" r="34" fill="#123f3a"/>
+    <rect x="42" y="48" width="40" height="36" rx="5" fill="#22c55e"/>
+    <path d="M49 58h26M49 69h26M49 80h18" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+    <text x="34" y="134" class="card-title">4. Google Sheet</text>
+    <text x="34" y="176" class="card-text">Ghi đúng dòng, tự</text>
+    <text x="34" y="207" class="card-text">tính tiền và lưu log.</text>
+  </g>
+
+  <g transform="translate(1315 535)">
+    <rect width="445" height="320" rx="22" class="card" filter="url(#shadow)"/>
+    <text x="34" y="62" class="card-title">Các tab trong Sheet</text>
+    <rect x="34" y="96" width="377" height="52" rx="12" fill="#123f3a" stroke="#2dd4bf" stroke-opacity="0.35"/>
+    <text x="56" y="130" class="pill">DanhSachKhach: mã khách</text>
+    <rect x="34" y="163" width="377" height="52" rx="12" fill="#152b55" stroke="#60a5fa" stroke-opacity="0.35"/>
+    <text x="56" y="197" class="pill">Tiền Khách Nợ: bảng chính</text>
+    <rect x="34" y="230" width="377" height="52" rx="12" fill="#523716" stroke="#fbbf24" stroke-opacity="0.35"/>
+    <text x="56" y="264" class="pill">LichSuNhap: nhật ký nhập</text>
+  </g>
+
+  <g transform="translate(112 585)">
+    <rect width="1090" height="300" rx="24" fill="#0b1320" stroke="#26394f" stroke-width="2" filter="url(#shadow)"/>
+    <text x="42" y="65" class="white" style="font:800 38px Inter, Arial, sans-serif;">Quy tắc tự động</text>
+
+    <g transform="translate(44 102)">
+      <circle cx="16" cy="16" r="16" fill="#2dd4bf"/>
+      <path d="M8 17l6 6 12-15" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="24" class="white" style="font:600 25px Inter, Arial, sans-serif;">Ngày đã có số lượng: không ghi đè.</text>
+    </g>
+    <g transform="translate(44 158)">
+      <circle cx="16" cy="16" r="16" fill="#2dd4bf"/>
+      <path d="M8 17l6 6 12-15" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="24" class="white" style="font:600 25px Inter, Arial, sans-serif;">Nhập bù ngày cũ: tự chèn lên trên cho đúng thời gian.</text>
+    </g>
+    <g transform="translate(44 214)">
+      <circle cx="16" cy="16" r="16" fill="#2dd4bf"/>
+      <path d="M8 17l6 6 12-15" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="24" class="white" style="font:600 25px Inter, Arial, sans-serif;">Sheet tự tính Chưa Thanh Toán, Còn lại bằng công thức.</text>
+    </g>
+  </g>
+
+  <g transform="translate(110 925)">
+    <rect width="1700" height="52" rx="26" fill="#102c2a" stroke="#2dd4bf" stroke-opacity="0.32"/>
+    <text x="32" y="35" class="small">Tóm tắt:</text>
+    <text x="142" y="35" class="note">Website nhập liệu → API kiểm tra → Google Sheet ghi số lượng → Công thức tự tính tiền → Lịch sử được lưu lại.</text>
+  </g>
+</svg>

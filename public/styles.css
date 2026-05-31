@@ -1,0 +1,307 @@
+:root {
+  /* Khai báo bảng màu dùng chung cho toàn trang. */
+  color-scheme: light;
+  --bg: #eef2f6;
+  --panel: #ffffff;
+  --ink: #17202a;
+  --muted: #657382;
+  --line: #d8dee6;
+  --accent: #0f766e;
+  --accent-strong: #0b5f59;
+  --danger: #b42318;
+  --ok: #067647;
+}
+
+* {
+  /* Tính width bao gồm padding/border để layout dễ kiểm soát. */
+  box-sizing: border-box;
+}
+
+body {
+  /* Reset khoảng trắng mặc định của trình duyệt. */
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+.shell {
+  /* Giới hạn chiều rộng desktop, mobile thì CSS bên dưới cho tràn màn hình. */
+  width: min(980px, calc(100% - 32px));
+  margin: 28px auto;
+}
+
+.panel {
+  /* Khung form chính. */
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.hidden {
+  display: none;
+}
+
+.login-panel {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.login-status {
+  font-size: 13px;
+}
+
+.top-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbar {
+  /* Khu vực tiêu đề và nút tải khách. */
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.form {
+  /* Form dùng grid để các field cách đều nhau. */
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.grid {
+  /* Grid 3 cột cho các ô nhập số lượng. */
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.primary-items {
+  /* Ba ô nhập chính luôn giữ 3 cột. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.optional-items {
+  /* Khối xổ xuống cho thông tin thêm. */
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.optional-items summary {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+  font-weight: 750;
+  cursor: pointer;
+  user-select: none;
+}
+
+.optional-items summary::marker {
+  color: var(--accent);
+}
+
+.optional-items .grid {
+  padding: 0 13px 13px;
+}
+
+label {
+  /* Label bọc chữ tiêu đề và input. */
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 650;
+  min-width: 0;
+}
+
+input,
+textarea {
+  /* Style chung cho input/textarea. */
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px 13px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.date-field {
+  /* Khung ngày custom để tránh input date iPhone làm tràn màn hình. */
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.date-text {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 12px 13px;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.date-picker {
+  /* Input date thật nằm phủ lên, opacity 0 để vẫn bấm ra lịch. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+button {
+  /* Style chung cho button. */
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 11px 14px;
+  font: inherit;
+  font-weight: 700;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.primary {
+  /* Nút chính màu xanh. */
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+}
+
+.customer-preview,
+.result {
+  /* Khung preview khách và khung thông báo. */
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px 13px;
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.result {
+  display: none;
+}
+
+.result.show {
+  display: block;
+}
+
+.result.ok {
+  color: var(--ok);
+  border-color: #75c7a0;
+  background: #f0fdf4;
+}
+
+.result.error {
+  color: var(--danger);
+  border-color: #f3a29b;
+  background: #fff5f5;
+}
+
+@media (max-width: 720px) {
+  /* Tối ưu giao diện điện thoại. */
+  body {
+    background: #fff;
+  }
+
+  .shell {
+    width: 100%;
+    margin: 0;
+  }
+
+  .topbar {
+    display: grid;
+  }
+
+  .top-actions {
+    justify-content: stretch;
+  }
+
+  .top-actions button {
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-items {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .primary-items label {
+    font-size: 12px;
+  }
+
+  .primary-items input {
+    padding: 11px 9px;
+    font-size: 16px;
+  }
+
+  .panel {
+    min-height: 100vh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 16px 10px 24px;
+    overflow: hidden;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
+
+}

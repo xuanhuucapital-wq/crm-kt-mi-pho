@@ -1,0 +1,7 @@
+.env
+.env.*
+*service-account*.json
+poised-resource-*.json
+node_modules/
+.netlify/
+dist/
