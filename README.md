@@ -1,6 +1,6 @@
 # Nhập Liệu Hàng Hóa
 
-Website nhập liệu nội bộ chạy trên Netlify, ghi dữ liệu vào Google Sheet qua Netlify Functions.
+Website nhập liệu nội bộ chạy trên Netlify hoặc Cloudflare Pages, ghi dữ liệu vào Google Sheet qua serverless functions.
 
 ## Cấu hình cần có
 
@@ -40,3 +40,15 @@ npm run dev
 ```
 
 Mở `http://localhost:8888`.
+
+## Deploy Cloudflare Pages
+
+Cloudflare Pages cần:
+
+```text
+Build command: npm run build
+Build output directory: public
+Functions directory: functions
+```
+
+Trong phần Environment variables của Cloudflare, thêm đủ các key giống phần cấu hình ở trên. Các giá trị nhạy cảm như `GOOGLE_PRIVATE_KEY` và `APP_AUTH_SECRET` nên để dạng secret.
