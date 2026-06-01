@@ -173,25 +173,43 @@ function findCustomer(customersValues, code) {
 
 // Tìm block dòng của một khách trong tab Tiền Khách Nợ.
 function findCustomerBlock(values, headerRowIndex, nameColumn, customerName) {
-  // Lưu danh sách dòng có tên khách trùng.
-  const rows = [];
+  // Tìm dòng đầu tiên có tên khách trùng.
+  let start = -1;
   // Duyệt từ dưới header đến hết dữ liệu.
   for (let i = headerRowIndex + 1; i < values.length; i += 1) {
-    // Nếu cột tên khách trùng customerName thì lưu dòng.
+    // Nếu cột tên khách trùng customerName thì đây là đầu block.
     if (normalizeText(getCell(values[i], nameColumn)) === normalizeText(customerName)) {
-      rows.push(i);
+      start = i;
+      break;
     }
   }
 
   // Nếu không có dòng nào thì nghĩa là khách chưa có block trong tab chính.
-  if (!rows.length) {
+  if (start === -1) {
     throw new Error(`Không tìm thấy block khách "${customerName}" trong tab chính.`);
   }
 
-  // Block bắt đầu ở dòng đầu tiên và kết thúc ở dòng cuối cùng tìm được.
+  // Block kéo dài tới ngay trước khách kế tiếp.
+  // Các dòng trống bên dưới khách hiện tại vẫn được xem là thuộc block của khách đó.
+  let end = values.length - 1;
+  for (let i = start + 1; i < values.length; i += 1) {
+    // Lấy tên khách ở dòng đang xét.
+    const rowCustomerName = normalizeText(getCell(values[i], nameColumn));
+    // Dòng trống tên khách thì vẫn thuộc block hiện tại.
+    if (!rowCustomerName) {
+      continue;
+    }
+    // Nếu gặp tên khách khác thì block hiện tại kết thúc ở dòng phía trên.
+    if (rowCustomerName !== normalizeText(customerName)) {
+      end = i - 1;
+      break;
+    }
+  }
+
+  // Block bắt đầu ở dòng đầu tiên của khách và kết thúc trước khách kế tiếp.
   return {
-    start: rows[0],
-    end: rows[rows.length - 1],
+    start,
+    end,
   };
 }
 
