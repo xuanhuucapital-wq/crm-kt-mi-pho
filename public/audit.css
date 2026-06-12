@@ -1,0 +1,26 @@
+.audit-filters {
+  grid-template-columns: minmax(250px, 1.4fr) repeat(3, minmax(180px, .7fr));
+}
+
+@media (max-width: 1100px) {
+  .audit-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .audit-filters {
+    grid-template-columns: 1fr;
+  }
+}

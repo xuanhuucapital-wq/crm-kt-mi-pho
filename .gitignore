@@ -1,7 +1,14 @@
 .env
 .env.*
+.DS_Store
 *service-account*.json
 poised-resource-*.json
 node_modules/
 .netlify/
 dist/
+data/**
+!data/.gitkeep
+public/crm-snapshot.json
+outputs/
+*.xlsx
+*.bak

@@ -1,12 +1,18 @@
 {
   "scripts": {
     "dev": "netlify dev",
-    "build": "echo \"Static app ready\""
+    "build": "echo \"Static app ready\"",
+    "test": "node scripts/run-crm-tests.js"
   },
   "dependencies": {
-    "@netlify/functions": "^3.0.0"
+    "@netlify/functions": "^3.0.0",
+    "exceljs": "^4.4.0",
+    "uuid": "11.1.1"
+  },
+  "overrides": {
+    "uuid": "$uuid"
   },
   "devDependencies": {
-    "netlify-cli": "^17.38.1"
+    "netlify-cli": "^26.1.0"
   }
 }

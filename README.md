@@ -1,64 +1,71 @@
-# Nhập Liệu Hàng Hóa
+# CRM Nhà Xưởng
 
-Website nhập liệu nội bộ chạy trên Netlify hoặc Cloudflare Pages, ghi dữ liệu vào Google Sheet qua serverless functions.
+Website CRM nội bộ quản lý hai phân hệ độc lập trong cùng một dự án:
 
-## Cấu hình cần có
+- `Xưởng Mì`: mì, da cảo, da hoành và các mặt hàng phụ hiện có.
+- `Xưởng Phở`: phở sợi và phở cuốn.
 
-Tạo file `.env` từ `.env.example`, rồi điền:
+Khi chuyển xưởng, toàn bộ tổng quan, khách hàng, đơn hàng, công nợ, báo cáo,
+thông tin sản xuất, Excel và nhật ký được lọc theo phân hệ đang chọn.
 
-```env
-GOOGLE_SHEET_ID=your_google_sheet_id
-GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account_email
-GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-MAIN_SHEET_NAME=Tiền Khách Nợ
-CUSTOMERS_SHEET_NAME=DanhSachKhach
-LOG_SHEET_NAME=LichSuNhap
-APP_AUTH_SECRET=your_random_secret
-```
+## Nguồn dữ liệu
 
-`GOOGLE_PRIVATE_KEY` lấy từ file JSON Service Account đã tải về. Không commit file `.env` hoặc file JSON.
+Nguồn dữ liệu chính là `data/crm-database.json`.
 
-## Tab Google Sheet
+- Tạo/sửa khách hàng ghi vào database CRM.
+- Tạo/sửa đơn hàng ghi vào database CRM.
+- Ghi nhận thanh toán và phân bổ công nợ ghi vào database CRM.
+- Thêm/sửa/khớp thông tin sản xuất ghi vào database CRM.
+- Tiền hàng và công nợ được tính lại trong backend CRM.
+- Dữ liệu cũ không có `businessUnit` được tự nhận là dữ liệu Xưởng Mì.
+- Người dùng có thể được cấp quyền Xưởng Mì, Xưởng Phở hoặc cả hai.
+- Excel công nợ của Xưởng Phở dùng bảng chi tiết riêng cho phở sợi và phở cuốn.
 
-`DanhSachKhach` cần có dòng tiêu đề:
+Google Sheets không còn được dùng để đọc, ghi hoặc đối chiếu dữ liệu.
 
-```text
-MaKH | TenKH | GiaMi | GiaCao | GiaHoanh | NhaXeMacDinh | TrangThai
-```
-
-`LichSuNhap` cần có dòng tiêu đề:
-
-```text
-ThoiGian | EmailNguoiNhap | MaKH | TenKH | Ngay | MiKg | CaoKg | HoanhKg | HuTieu | VoBanhGoi | TienUng | ThungXop | NhaXe | GhiChu | TrangThai
-```
-
-## Chạy thử
+## Chạy local
 
 ```bash
-npm install
-npm run dev
+export APP_AUTH_SECRET="$(openssl rand -hex 32)"
+PORT=8889 node local-server.js
 ```
 
-Mở `http://localhost:8888`.
+Mở `http://localhost:8889`.
 
-## Deploy Cloudflare Pages
+Lần đầu, chọn **Đăng ký tài khoản giao hàng** và đăng ký email chủ doanh nghiệp. Khi chạy local, tài khoản đầu tiên sẽ trở thành `Quản lý`. Các tài khoản đăng ký sau mặc định là `Giao hàng / Chờ duyệt`.
 
-Cloudflare Pages cần:
+## Tài khoản và phân quyền
 
-```text
-Build command: npm run build
-Build output directory: public
-Functions directory: functions
+- `Giao hàng`: chỉ được xem danh sách khách cần thiết và tạo đơn mới.
+- `Quản lý`: xem toàn bộ CRM, sửa dữ liệu, công nợ, báo cáo, xuất Excel và quản lý user.
+- Mật khẩu được băm bằng `scrypt` với salt riêng, không lưu mật khẩu rõ.
+- Khi đổi quyền hoặc khóa user, toàn bộ token cũ của user đó mất hiệu lực.
+- API kiểm tra quyền ở backend; ẩn menu chỉ là lớp giao diện bổ sung.
+
+## Cấu hình production
+
+Tạo biến môi trường:
+
+```bash
+APP_AUTH_SECRET=<chuỗi ngẫu nhiên tối thiểu 64 ký tự>
+CRM_ADMIN_EMAIL=<email chủ doanh nghiệp>
+NODE_ENV=production
 ```
 
-Trong phần Environment variables của Cloudflare, thêm đủ các key giống phần cấu hình ở trên. Các giá trị nhạy cảm như `GOOGLE_PRIVATE_KEY` và `APP_AUTH_SECRET` nên để dạng secret.
+Email `CRM_ADMIN_EMAIL` được phép đăng ký tài khoản quản lý đầu tiên. Không đặt mật khẩu, token hoặc secret trong source code.
 
-Nếu deploy bằng Cloudflare Workers, repo đã có `wrangler.jsonc`. Cloudflare cần chạy:
+## Lưu ý database
 
-```text
-Build command: npm run build
-Deploy command: npx wrangler deploy
-Root directory: /
+`data/crm-database.json` chỉ phù hợp chạy nội bộ trên một máy. Trước khi mở CRM cho nhiều người dùng qua internet, cần chuyển dữ liệu sang PostgreSQL hoặc một database managed có transaction, backup tự động, mã hóa ổ đĩa và kiểm soát truy cập. Không triển khai file JSON trên hệ thống serverless nhiều instance.
+
+Xem checklist tại [SECURITY.md](SECURITY.md).
+
+## Khởi tạo lại database
+
+Chỉ chạy khi thực sự muốn tạo lại database từ snapshot:
+
+```bash
+node scripts/init-crm-database.js
 ```
 
-Với Workers, thêm các biến trong **Settings -> Variables and secrets** của Worker.
+Lệnh này sẽ ghi đè `data/crm-database.json`.

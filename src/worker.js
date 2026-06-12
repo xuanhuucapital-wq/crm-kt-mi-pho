@@ -1,30 +1,31 @@
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets";
+// Tạm ngắt toàn bộ kết nối Google Sheets. Đổi thành true khi cần kết nối lại.
+const GOOGLE_SHEETS_CONNECTED = false;
 const PASSWORD_SALT = "nhap-lieu-mi-v1";
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-const USERS = [
-  {
-    username: "admin",
-    displayName: "Admin",
-    role: "admin",
-    email: "admin@noi-bo.local",
-    passwordHash: "f7c06128217e70cb4a0c42dbd9d860dc5b6ffb763309216bd6b83431a40d6c77",
-  },
-  {
-    username: "nhanvien",
-    displayName: "Nhân viên",
-    role: "staff",
-    email: "nhanvien@noi-bo.local",
-    passwordHash: "4db228f47130c8c6a6e90ae746f486e18047dd66933f08ae381ad13fa18e4a5b",
-  },
-];
-
 const MAIN_REQUIRED_HEADERS = ["Ngày Đặt", "Tên KH"];
 const CUSTOMER_REQUIRED_HEADERS = ["MaKH", "TenKH"];
-const CUSTOMER_COLUMNS = ["MaKH", "TenKH", "GiaMi", "GiaCao", "GiaHoanh", "NhaXeMacDinh", "TrangThai"];
+const CUSTOMER_COLUMNS = ["MaKH", "TenKH", "GiaMi", "GiaCao", "GiaHoanh", "NhaXeMacDinh", "ChinhSachThue", "ThueSuat", "TrangThai"];
 const quantityFields = ["miKg", "caoKg", "hoanhKg", "huTieu", "voBanhGoi"];
+const TRUCK_NAMES = [
+  { pattern: /thành\s*bưởi|thanh\s*buoi/i, name: "Thành Bưởi" },
+  { pattern: /\bbany\b/i, name: "Bany" },
+  { pattern: /huệ\s*nghĩa|hue\s*nghia/i, name: "Huệ Nghĩa" },
+  { pattern: /tư\s*nhiều|tu\s*nhieu/i, name: "Tư Nhiều" },
+];
+
+function truckFromText(value) {
+  return TRUCK_NAMES.find((item) => item.pattern.test(String(value || "")))?.name || "";
+}
+
+function noteWithoutTruck(value) {
+  let text = String(value || "");
+  TRUCK_NAMES.forEach((item) => { text = text.replace(item.pattern, ""); });
+  return text.replace(/\s*[-|,]\s*$/g, "").replace(/^\s*[-|,]\s*/g, "").replace(/\s{2,}/g, " ").trim();
+}
 
 const fieldToHeader = {
   orderDate: ["Ngày Đặt"],
@@ -41,7 +42,14 @@ const fieldToHeader = {
   tienUng: ["Tiền ứng", "Tien ung", "Tiền Ứng KH", "Tien Ung KH"],
   thungXop: ["Thùng Xốp", "Thung Xop"],
   nhaXe: ["Nhà xe", "Nha xe"],
+  extraShipCustomer: ["Khách Phụ Ship", "Khach Phu Ship", "Khách phụ ship", "KhachPhuShip"],
   ghiChu: ["Ghi chú", "Ghi chu"],
+  taxRate: ["Thuế suất", "Thue suat", "TaxRate"],
+  taxPayer: ["Người chịu thuế", "Nguoi chiu thue", "TaxPayer"],
+  taxAmount: ["Tiền thuế", "Tien thue", "Thuế 5%", "Thue 5%", "TaxAmount"],
+  subtotal: ["Tiền hàng", "Tien hang", "Tạm tính", "Tam tinh", "Subtotal"],
+  orderTotal: ["Tổng tiền", "Tong tien", "Thành tiền", "Thanh tien", "Chưa Thanh Toán", "Chua Thanh Toan", "OrderTotal"],
+  paid: ["Đã thanh toán", "Da thanh toan", "Khách trả", "Khach tra"],
 };
 
 function json(body, status = 200) {
@@ -100,7 +108,7 @@ async function createSessionToken(env, user) {
     exp: Date.now() + TOKEN_TTL_MS,
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
-  const signature = await hmacSign(env.APP_AUTH_SECRET || "doi-secret-nay-khi-deploy", encodedPayload);
+  const signature = await hmacSign(requiredEnv(env, "APP_AUTH_SECRET"), encodedPayload);
   return `${encodedPayload}.${signature}`;
 }
 
@@ -110,7 +118,7 @@ async function verifySessionToken(env, token) {
   }
 
   const [encodedPayload, signature] = token.split(".");
-  const expectedSignature = await hmacSign(env.APP_AUTH_SECRET || "doi-secret-nay-khi-deploy", encodedPayload);
+  const expectedSignature = await hmacSign(requiredEnv(env, "APP_AUTH_SECRET"), encodedPayload);
   if (signature !== expectedSignature) {
     throw new Error("Phiên đăng nhập không hợp lệ.");
   }
@@ -190,6 +198,10 @@ async function getAccessToken(env) {
 }
 
 async function googleRequest(env, path, options = {}) {
+  if (!GOOGLE_SHEETS_CONNECTED) {
+    throw new Error("Google Sheets đang tạm ngắt kết nối.");
+  }
+
   const token = await getAccessToken(env);
   const response = await fetch(`${SHEETS_URL}/${requiredEnv(env, "GOOGLE_SHEET_ID")}${path}`, {
     ...options,
@@ -272,7 +284,7 @@ function colToA1(index) {
 }
 
 function parseNumber(value) {
-  const raw = String(value || "").trim().replace(",", ".");
+  const raw = String(value ?? "").trim().replace(",", ".");
   if (!raw) {
     return "";
   }
@@ -409,9 +421,7 @@ function findCustomerBlock(values, headerRowIndex, nameColumn, customerName) {
       break;
     }
   }
-  if (start === -1) {
-    throw new Error(`Không tìm thấy block khách "${customerName}" trong tab chính.`);
-  }
+  if (start === -1) return null;
 
   let end = values.length - 1;
   for (let i = start + 1; i < values.length; i += 1) {
@@ -427,8 +437,16 @@ function findCustomerBlock(values, headerRowIndex, nameColumn, customerName) {
   return { start, end };
 }
 
+function findLastCustomerRow(values, headerRowIndex, nameColumn) {
+  for (let i = values.length - 1; i > headerRowIndex; i -= 1) {
+    if (normalizeText(getCell(values[i], nameColumn))) return i;
+  }
+  return headerRowIndex;
+}
+
 function rowHasQuantity(row, columns) {
-  return quantityFields.some((field) => !isBlank(getCell(row, columns[field])));
+  return quantityFields.some((field) => !isBlank(getCell(row, columns[field])))
+    || normalizeText(getCell(row, columns.ghiChu)).includes("khách nghỉ");
 }
 
 function findTargetRow(values, block, columns, sheetDate) {
@@ -480,15 +498,25 @@ function buildUpdates({ payload, customer, columns, sheetName, rowIndex, sheetDa
   add("priceCao", customer.priceCao);
   add("priceHoanh", customer.priceHoanh);
   add("customerName", customer.name);
-  add("miKg", parseNumber(payload.miKg));
-  add("caoKg", parseNumber(payload.caoKg));
-  add("hoanhKg", parseNumber(payload.hoanhKg));
-  add("huTieu", parseNumber(payload.huTieu));
-  add("voBanhGoi", parseNumber(payload.voBanhGoi));
+  const customerResting = payload.customerResting === true || String(payload.customerResting) === "true";
+  add("miKg", customerResting ? 0 : parseNumber(payload.miKg));
+  add("caoKg", customerResting ? 0 : parseNumber(payload.caoKg));
+  add("hoanhKg", customerResting ? 0 : parseNumber(payload.hoanhKg));
+  add("huTieu", customerResting ? 0 : parseNumber(payload.huTieu));
+  add("voBanhGoi", customerResting ? 0 : parseNumber(payload.voBanhGoi));
   add("tienUng", parseNumber(payload.tienUng));
-  add("thungXop", parseNumber(payload.thungXop));
-  add("nhaXe", payload.nhaXe || customer.defaultTruck || "");
-  add("ghiChu", payload.ghiChu || "");
+  add("thungXop", customerResting ? 0 : parseNumber(payload.thungXop));
+  const resolvedTruck = truckFromText(payload.nhaXe) || truckFromText(payload.ghiChu) || payload.nhaXe || customer.defaultTruck || "";
+  add("nhaXe", resolvedTruck);
+  add("extraShipCustomer", String(payload.extraShipCustomer || "").trim());
+  const taxRate = parseNumber(payload.taxRate);
+  const taxNote = taxRate ? `Thuế ${taxRate}%: ${payload.taxPayer === "owner" ? "xưởng chịu (ưu đãi)" : "khách trả"}` : "";
+  add("ghiChu", [customerResting ? "Khách nghỉ" : "", noteWithoutTruck(payload.ghiChu), taxNote].filter(Boolean).join(" | "));
+  add("taxRate", parseNumber(payload.taxRate));
+  add("taxPayer", payload.taxPayer || "customer");
+  add("taxAmount", parseNumber(payload.taxAmount));
+  add("subtotal", parseNumber(payload.subtotal));
+  add("orderTotal", parseNumber(payload.orderTotal));
   return updates;
 }
 
@@ -508,17 +536,19 @@ async function appendLog(env, payload, customer, status) {
   set("MaKH", customer.code);
   set("TenKH", customer.name);
   set("Ngay", toSheetDate(payload.orderDate));
-  set("MiKg", parseNumber(payload.miKg));
-  set("CaoKg", parseNumber(payload.caoKg));
-  set("HoanhKg", parseNumber(payload.hoanhKg));
-  set("HuTieu", parseNumber(payload.huTieu));
-  set("VoBanhGoi", parseNumber(payload.voBanhGoi));
+  const customerResting = payload.customerResting === true || String(payload.customerResting) === "true";
+  set("MiKg", customerResting ? 0 : parseNumber(payload.miKg));
+  set("CaoKg", customerResting ? 0 : parseNumber(payload.caoKg));
+  set("HoanhKg", customerResting ? 0 : parseNumber(payload.hoanhKg));
+  set("HuTieu", customerResting ? 0 : parseNumber(payload.huTieu));
+  set("VoBanhGoi", customerResting ? 0 : parseNumber(payload.voBanhGoi));
   set("TienUng", parseNumber(payload.tienUng));
-  set("ThungXop", parseNumber(payload.thungXop));
-  set("NhaXe", payload.nhaXe || customer.defaultTruck || "");
-  set("GhiChu", payload.ghiChu || "");
+  set("ThungXop", customerResting ? 0 : parseNumber(payload.thungXop));
+  set("NhaXe", truckFromText(payload.nhaXe) || truckFromText(payload.ghiChu) || payload.nhaXe || customer.defaultTruck || "");
+  set("Khách Phụ Ship", String(payload.extraShipCustomer || "").trim());
+  set("GhiChu", [customerResting ? "Khách nghỉ" : "", noteWithoutTruck(payload.ghiChu)].filter(Boolean).join(" | "));
   set("TrangThai", status);
-  await batchUpdateValues(env, [{ range: sheetRange(sheetName, `A${values.length + 1}:O${values.length + 1}`), values: [row] }]);
+  await batchUpdateValues(env, [{ range: sheetRange(sheetName, `A${values.length + 1}:AZ${values.length + 1}`), values: [row] }]);
 }
 
 async function handleLogin(env, request) {
@@ -526,9 +556,10 @@ async function handleLogin(env, request) {
     return json({ error: "Method not allowed" }, 405);
   }
   const payload = await request.json();
-  const username = normalizeText(payload.username);
+  const email = normalizeText(payload.email);
   const password = String(payload.password || "");
-  const user = USERS.find((item) => normalizeText(item.username) === username);
+  const users = JSON.parse(requiredEnv(env, "AUTH_USERS_JSON"));
+  const user = users.find((item) => normalizeText(item.email) === email);
   if (!user || user.passwordHash !== await hashPassword(password)) {
     return json({ error: "Sai tài khoản hoặc mật khẩu." }, 401);
   }
@@ -545,10 +576,73 @@ async function handleLogin(env, request) {
 }
 
 async function handleCustomers(env, request) {
-  await requireAuth(env, request);
+  const sessionUser = await requireAuth(env, request);
   const sheetName = env.CUSTOMERS_SHEET_NAME || "DanhSachKhach";
-  const values = await getValues(env, sheetName, "A1:G2000");
+  const values = await getValues(env, sheetName, "A1:Z2000");
   const { headerRowIndex, header } = findHeader(values, ["MaKH", "TenKH"]);
+  if (request.method === "POST") {
+    if (sessionUser.role !== "manager") return json({ error: "Chỉ tài khoản quản lý được thêm khách hàng." }, 403);
+    const payload = await request.json();
+    const code = String(payload.MaKH || "").trim();
+    const name = String(payload.TenKH || "").trim();
+    if (!code || !name) return json({ error: "Vui lòng nhập mã khách và tên khách hàng." }, 400);
+    const codeColumn = header[normalizeText("MaKH")];
+    const duplicate = values.slice(headerRowIndex + 1).some((row) => normalizeText(row[codeColumn]) === normalizeText(code));
+    if (duplicate) return json({ error: `Mã khách ${code} đã tồn tại.` }, 409);
+    const blankOffset = values.slice(headerRowIndex + 1).findIndex((row) => !String(row[codeColumn] || "").trim());
+    const rowNumber = blankOffset === -1 ? values.length + 1 : headerRowIndex + blankOffset + 2;
+    const fields = { MaKH: code, TenKH: name, GiaMi: payload.GiaMi || 0, GiaCao: payload.GiaCao || 0, GiaHoanh: payload.GiaHoanh || 0, NhaXeMacDinh: payload.NhaXeMacDinh || "", ChinhSachThue: payload.ChinhSachThue || "", ThueSuat: payload.ThueSuat || 0, TrangThai: "active" };
+    const updates = Object.entries(fields).flatMap(([column, value]) => {
+      const index = header[normalizeText(column)];
+      return index === undefined ? [] : [{ range: sheetRange(sheetName, `${colToA1(index)}${rowNumber}`), values: [[value]] }];
+    });
+    await batchUpdateValues(env, updates);
+    return json({ ok: true, rowNumber, customer: fields }, 201);
+  }
+  if (request.method === "PUT") {
+    if (sessionUser.role !== "manager") return json({ error: "Chỉ tài khoản quản lý được sửa bảng giá khách hàng." }, 403);
+    const payload = await request.json();
+    const codeColumn = header[normalizeText("MaKH")];
+    const offset = values.slice(headerRowIndex + 1).findIndex((row) => normalizeText(row[codeColumn]) === normalizeText(payload.MaKH));
+    if (offset === -1) return json({ error: "Không tìm thấy khách hàng cần cập nhật." }, 404);
+    const rowNumber = headerRowIndex + offset + 2;
+    const nameColumn = header[normalizeText("TenKH")];
+    const oldName = String(values[rowNumber - 1]?.[nameColumn] || "").trim();
+    const newName = String(payload.TenKH || oldName).trim();
+    const editable = ["TenKH", "GiaMi", "GiaCao", "GiaHoanh", "NhaXeMacDinh", "ChinhSachThue", "ThueSuat"];
+    const updates = editable.flatMap((column) => {
+      const index = header[normalizeText(column)];
+      return index === undefined || payload[column] === undefined
+        ? []
+        : [{ range: sheetRange(sheetName, `${colToA1(index)}${rowNumber}`), values: [[payload[column]]] }];
+    });
+    if (!updates.length) return json({ error: "Sheet chưa có cột phù hợp để cập nhật." }, 400);
+    let syncedOrders = 0;
+    let syncedProduction = 0;
+    if (newName && normalizeText(newName) !== normalizeText(oldName)) {
+      const mainSheet = env.MAIN_SHEET_NAME || "Tiền Khách Nợ";
+      const productionSheet = env.PRODUCTION_INFO_SHEET_NAME || "thongtinkhachhang";
+      const [mainValues, productionValues] = await Promise.all([
+        getValues(env, mainSheet, "A1:AZ5000"),
+        getValues(env, productionSheet, "A1:AZ1000"),
+      ]);
+      const mainHeader = findHeader(mainValues, ["Ngày Đặt", "Tên KH"]);
+      const mainNameColumn = mainHeader.header[normalizeText("Tên KH")];
+      mainValues.slice(mainHeader.headerRowIndex + 1).forEach((row, index) => {
+        if (normalizeText(row[mainNameColumn]) !== normalizeText(oldName)) return;
+        updates.push({ range: sheetRange(mainSheet, `${colToA1(mainNameColumn)}${mainHeader.headerRowIndex + index + 2}`), values: [[newName]] });
+        syncedOrders += 1;
+      });
+      productionValues.slice(1).forEach((row, index) => {
+        if (normalizeText(row[6]) !== normalizeText(payload.MaKH)) return;
+        updates.push({ range: sheetRange(productionSheet, `A${index + 2}`), values: [[newName]] });
+        syncedProduction += 1;
+      });
+    }
+    await batchUpdateValues(env, updates);
+    return json({ ok: true, rowNumber, syncedOrders, syncedProduction });
+  }
+  if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
   const customers = values
     .slice(headerRowIndex + 1)
     .map((row) => {
@@ -564,8 +658,203 @@ async function handleCustomers(env, request) {
   return json({ customers });
 }
 
+async function handleProductionInfo(env, request) {
+  const sessionUser = await requireAuth(env, request);
+  const sheetName = env.PRODUCTION_INFO_SHEET_NAME || "thongtinkhachhang";
+  const values = await getValues(env, sheetName, "A1:AZ1000");
+  const header = values[0] || [];
+  const cell = (row, index) => String(row?.[index] || "").trim();
+  const normalize = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const customerValues = await getValues(env, env.CUSTOMERS_SHEET_NAME || "DanhSachKhach", "A1:Z2000");
+  const customers = customerValues.slice(1).map((row) => ({ code: cell(row, 0), name: cell(row, 1) })).filter((customer) => customer.code && customer.name);
+  const matchCustomer = (entryName) => {
+    const text = normalize(entryName);
+    if (!text) return "";
+    const codeMatches = customers.filter((customer) => {
+      const code = normalize(customer.code);
+      return code && new RegExp(`(^|\\s)${code}(?=\\s|$)`).test(text);
+    });
+    if (codeMatches.length === 1) return codeMatches[0].code;
+    const nameMatches = customers.filter((customer) => {
+      const name = normalize(customer.name);
+      return name.length >= 4 && (text.includes(name) || name.includes(text));
+    });
+    return nameMatches.length === 1 ? nameMatches[0].code : "";
+  };
+  if (request.method === "PUT") {
+    if (sessionUser.role !== "manager") return json({ error: "Chỉ quản lý được sửa thông tin sản xuất." }, 403);
+    const payload = await request.json();
+    const rowNumber = Number(payload.id);
+    if (!Number.isInteger(rowNumber) || rowNumber < 2 || rowNumber > values.length + 50) return json({ error: "Dòng thông tin cần sửa không hợp lệ." }, 400);
+    const fields = [payload.customer, payload.usualOrder, payload.production, payload.delivery, payload.additional, payload.invoice, payload.customerCode].map((value) => String(value || "").trim());
+    const updates = [{ range: sheetRange(sheetName, `A${rowNumber}:G${rowNumber}`), values: [fields] }];
+    if (!cell(header, 6)) updates.push({ range: sheetRange(sheetName, "G1"), values: [["Mã KH CRM"]] });
+    await batchUpdateValues(env, updates);
+    return json({ ok: true, rowNumber });
+  }
+  if (request.method === "POST") {
+    if (sessionUser.role !== "manager") return json({ error: "Chỉ quản lý được đồng bộ thông tin sản xuất." }, 403);
+    const payload = await request.json().catch(() => ({}));
+    if (payload.action === "create") {
+      const fields = [payload.customer, payload.usualOrder, payload.production, payload.delivery, payload.additional, payload.invoice, payload.customerCode]
+        .map((value) => String(value || "").trim());
+      if (!fields[0]) return json({ error: "Vui lòng nhập tên khách hàng." }, 400);
+      if (!fields.slice(1, 6).some(Boolean)) return json({ error: "Vui lòng nhập ít nhất một thông tin về sản xuất hoặc giao hàng." }, 400);
+      const rowNumber = Math.max(values.length + 1, 2);
+      const updates = [{ range: sheetRange(sheetName, `A${rowNumber}:G${rowNumber}`), values: [fields] }];
+      if (!cell(header, 6)) updates.push({ range: sheetRange(sheetName, "G1"), values: [["Mã KH CRM"]] });
+      await batchUpdateValues(env, updates);
+      return json({ ok: true, rowNumber }, 201);
+    }
+    const updates = [];
+    if (!cell(header, 6)) updates.push({ range: sheetRange(sheetName, "G1"), values: [["Mã KH CRM"]] });
+    let matched = 0;
+    values.slice(1).forEach((row, index) => {
+      if (cell(row, 6) || !cell(row, 0)) return;
+      const code = matchCustomer(cell(row, 0));
+      if (!code) return;
+      updates.push({ range: sheetRange(sheetName, `G${index + 2}`), values: [[code]] });
+      matched += 1;
+    });
+    if (updates.length) await batchUpdateValues(env, updates);
+    return json({ ok: true, matched });
+  }
+  if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+  const entries = values.slice(1).map((row, index) => ({
+    id: index + 2,
+    customer: cell(row, 0),
+    usualOrder: cell(row, 1),
+    production: cell(row, 2),
+    delivery: cell(row, 3),
+    additional: cell(row, 4),
+    invoice: cell(row, 5),
+    customerCode: cell(row, 6) || matchCustomer(cell(row, 0)),
+    linkedExplicitly: Boolean(cell(row, 6)),
+  })).filter((entry) => Object.values(entry).some((value) => typeof value === "string" && value));
+  return json({
+    title: cell(header, 0) || "Thông tin khách hàng",
+    columns: {
+      customer: cell(header, 0),
+      usualOrder: cell(header, 1),
+      production: cell(header, 2),
+      delivery: cell(header, 3),
+      additional: cell(header, 4),
+      invoice: cell(header, 5),
+    },
+    entries,
+  });
+}
+
+function crmMoney(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const text = String(value || "").trim();
+  if (!text || !/\d/.test(text)) return 0;
+  const parsed = Number(text.replace(/[^\d]/g, ""));
+  return Number.isFinite(parsed) ? parsed * (text.includes("(") ? -1 : 1) : 0;
+}
+
+function crmNumber(value) {
+  const parsed = Number(String(value || "").trim().replace(",", ".").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function crmDate(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (match) {
+    let year = Number(match[3]);
+    if (year < 100) year += 2000;
+    return `${year}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[1])).padStart(2, "0")}`;
+  }
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : "";
+}
+
+function crmColumn(headerRow, names) {
+  const wanted = names.map(normalizeText);
+  const index = headerRow.findIndex((label) => wanted.includes(normalizeText(label)));
+  return index === -1 ? undefined : index;
+}
+
+function crmTruck(truck, note) {
+  const text = `${truck || ""} ${note || ""}`;
+  if (/thành\s*bưởi|thanh\s*buoi/i.test(text)) return "Thành Bưởi";
+  if (/\bbany\b/i.test(text)) return "Bany";
+  if (/huệ\s*nghĩa|hue\s*nghia/i.test(text)) return "Huệ Nghĩa";
+  if (/tư\s*nhiều|tu\s*nhieu/i.test(text)) return "Tư Nhiều";
+  return String(truck || "");
+}
+
+function crmCleanNote(note) {
+  return String(note || "").replace(/thành\s*bưởi|thanh\s*buoi|\bbany\b|huệ\s*nghĩa|hue\s*nghia|tư\s*nhiều|tu\s*nhieu/ig, "").replace(/\s*[-|,]\s*$/g, "").replace(/^\s*[-|,]\s*/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function crmIsResting(note, truck) {
+  const normalizedNote = normalizeText(note), normalizedTruck = normalizeText(truck);
+  return normalizedNote === "nghỉ" || normalizedNote === "nghi" || normalizedNote.includes("khách nghỉ") || normalizedTruck === "nghỉ" || normalizedTruck === "nghi";
+}
+
+function crmSuggestion(customer, allOrders) {
+  const history = allOrders.filter((order) => normalizeText(order.customerName) === normalizeText(customer.TenKH)).sort((a, b) => a.date.localeCompare(b.date)).slice(-8);
+  if (!history.length) return { confidence: "new", message: "Chưa có lịch sử mua. Nên xác nhận nhu cầu trước khi lên đơn.", products: [] };
+  const productMap = [["Mì", "miKg"], ["Da cảo", "caoKg"], ["Da hoành", "hoanhKg"]];
+  const products = productMap.map(([name, key]) => {
+    const bought = history.map((order) => order[key]).filter((value) => value > 0);
+    return { name, quantity: bought.length ? Math.round(bought.reduce((sum, value) => sum + value, 0) / bought.length * 10) / 10 : 0, frequency: Math.round(bought.length / history.length * 100) };
+  }).filter((product) => product.frequency >= 25);
+  const dates = history.map((order) => order.date).filter(Boolean);
+  const intervals = dates.slice(1).map((date, index) => Math.max(1, Math.round((new Date(date) - new Date(dates[index])) / 86400000)));
+  const averageInterval = intervals.length ? Math.round(intervals.reduce((sum, value) => sum + value, 0) / intervals.length) : 7;
+  const nextDate = dates.length ? new Date(new Date(`${dates.at(-1)}T00:00:00+07:00`).getTime() + averageInterval * 86400000).toISOString().slice(0, 10) : "";
+  const strongest = [...products].sort((a, b) => b.frequency - a.frequency)[0];
+  return { confidence: history.length >= 5 ? "high" : "medium", nextDate, averageInterval, products, message: strongest ? `Khách thường lấy ${strongest.name.toLowerCase()} khoảng ${strongest.quantity} kg, chu kỳ gần ${averageInterval} ngày.` : `Khách mua không theo mẫu cố định, nên xem lại ${history.length} đơn gần nhất.` };
+}
+
+async function handleCrm(env, request) {
+  if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+  await requireAuth(env, request);
+  const [mainValues, customerValues] = await Promise.all([
+    getValues(env, env.MAIN_SHEET_NAME || "Tiền Khách Nợ", "A1:AZ5000"),
+    getValues(env, env.CUSTOMERS_SHEET_NAME || "DanhSachKhach", "A1:Z2000"),
+  ]);
+  const customerHeader = findHeader(customerValues, ["MaKH", "TenKH"]);
+  const readCustomer = (row, label) => row[customerHeader.header[normalizeText(label)]] || "";
+  const customers = customerValues.slice(customerHeader.headerRowIndex + 1).map((row) => ({
+    MaKH: readCustomer(row, "MaKH"), TenKH: readCustomer(row, "TenKH"),
+    GiaMi: crmMoney(readCustomer(row, "GiaMi")), GiaCao: crmMoney(readCustomer(row, "GiaCao")), GiaHoanh: crmMoney(readCustomer(row, "GiaHoanh")),
+    NhaXeMacDinh: readCustomer(row, "NhaXeMacDinh"), ThueSuat: crmNumber(readCustomer(row, "ThueSuat")),
+    TrangThai: readCustomer(row, "TrangThai") || "active",
+  })).filter((item) => item.MaKH && item.TenKH && normalizeText(item.TrangThai) !== "inactive");
+  const mainHeader = findHeader(mainValues, ["Ngày Đặt", "Tên KH"]);
+  const headerRow = mainValues[mainHeader.headerRowIndex] || [];
+  const names = {
+    date: ["Ngày Đặt"], customer: ["Tên KH"], miKg: ["Mì (kg)", "Mi (kg)"], caoKg: ["Da Cảo (kg)", "Da Cao (kg)"], hoanhKg: ["Da Hoành Thánh (kg)", "Da Hoành Thành (kg)"], huTieu: ["Hủ Tiếu", "Hu Tieu"], voBanhGoi: ["Vỏ bánh gối", "Vo banh goi"], thungXop: ["Thùng Xốp", "Thung Xop"],
+    priceMi: ["Giá Mì"], priceCao: ["Giá Da Cảo"], priceHoanh: ["Giá Da Hoành"], advance: ["Tiền ứng"], taxAmount: ["Thuế 5%", "Tiền thuế"],
+    total: ["Chưa Thanh Toán", "Tổng tiền"], paid: ["Đã thanh toán"], debt: ["Còn lại"], truck: ["Nhà xe"], extraShipCustomer: ["Khách Phụ Ship", "Khach Phu Ship", "KhachPhuShip"], note: ["Ghi chú"],
+  };
+  const columns = Object.fromEntries(Object.entries(names).map(([key, value]) => [key, crmColumn(headerRow, value)]));
+  let currentCustomer = "";
+  const orders = mainValues.slice(mainHeader.headerRowIndex + 1).map((row, offset) => {
+    if (row[columns.customer]) currentCustomer = row[columns.customer];
+    const miKg = crmNumber(row[columns.miKg]), caoKg = crmNumber(row[columns.caoKg]), hoanhKg = crmNumber(row[columns.hoanhKg]), huTieu = crmNumber(row[columns.huTieu]), voBanhGoi = crmNumber(row[columns.voBanhGoi]), thungXop = crmNumber(row[columns.thungXop]);
+    const priceMi = crmMoney(row[columns.priceMi]), priceCao = crmMoney(row[columns.priceCao]), priceHoanh = crmMoney(row[columns.priceHoanh]);
+    const subtotal = miKg * priceMi + caoKg * priceCao + hoanhKg * priceHoanh;
+    const rawNote = row[columns.note] || "", rawTruck = row[columns.truck] || "", customerResting = crmIsResting(rawNote, rawTruck);
+    return { id: mainHeader.headerRowIndex + offset + 2, date: crmDate(row[columns.date]), customerName: currentCustomer, miKg, caoKg, hoanhKg, huTieu, voBanhGoi, thungXop, priceMi, priceCao, priceHoanh, subtotal, taxAmount: crmMoney(row[columns.taxAmount]), advance: crmMoney(row[columns.advance]), total: crmMoney(row[columns.total]) || subtotal, paid: crmMoney(row[columns.paid]), debt: columns.debt === undefined ? crmMoney(row[columns.total]) - crmMoney(row[columns.paid]) : crmMoney(row[columns.debt]), customerResting, truck: customerResting ? "" : crmTruck(rawTruck, rawNote), extraShipCustomer: row[columns.extraShipCustomer] || "", note: crmCleanNote(rawNote) };
+  }).filter((order) => order.customerName && (order.date || order.miKg || order.caoKg || order.hoanhKg));
+  const customerSummaries = customers.map((customer) => {
+    const customerOrders = orders.filter((order) => normalizeText(order.customerName) === normalizeText(customer.TenKH));
+    return { ...customer, orderCount: customerOrders.length, revenue: customerOrders.reduce((sum, order) => sum + order.total, 0), debt: customerOrders.reduce((sum, order) => sum + order.debt, 0), lastOrderDate: customerOrders.map((order) => order.date).filter(Boolean).sort().at(-1) || "", suggestion: crmSuggestion(customer, orders) };
+  });
+  return json({ customers: customerSummaries, orders: orders.sort((a, b) => {
+    if (!a.date && !b.date) return b.id - a.id;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date.localeCompare(a.date) || b.id - a.id;
+  }), summary: { customerCount: customers.length, orderCount: orders.length, revenue: orders.reduce((sum, order) => sum + order.total, 0), debt: customerSummaries.reduce((sum, customer) => sum + customer.debt, 0), tax: orders.reduce((sum, order) => sum + order.taxAmount, 0), advance: orders.reduce((sum, order) => sum + order.advance, 0) } });
+}
+
 async function handleOrders(env, request) {
-  if (request.method !== "POST") {
+  if (!["POST", "PUT"].includes(request.method)) {
     return json({ error: "Method not allowed" }, 405);
   }
 
@@ -577,9 +866,48 @@ async function handleOrders(env, request) {
   const mainSheetName = env.MAIN_SHEET_NAME || "Tiền Khách Nợ";
   const customersSheetName = env.CUSTOMERS_SHEET_NAME || "DanhSachKhach";
   const [mainValues, customersValues] = await Promise.all([
-    getValues(env, mainSheetName, "A1:Z5000"),
-    getValues(env, customersSheetName, "A1:G2000"),
+    getValues(env, mainSheetName, "A1:AZ5000"),
+    getValues(env, customersSheetName, "A1:Z2000"),
   ]);
+
+  if (request.method === "PUT") {
+    const rowNumber = Number(payload.rowId);
+    if (!Number.isInteger(rowNumber) || rowNumber < 2 || rowNumber > mainValues.length + 50) throw new Error("Dòng đơn hàng cần sửa không hợp lệ.");
+    const { headerRowIndex } = findHeader(mainValues, MAIN_REQUIRED_HEADERS);
+    if (rowNumber <= headerRowIndex + 1) throw new Error("Không thể sửa dòng tiêu đề.");
+    const headerRow = mainValues[headerRowIndex] || [];
+    const columns = {};
+    Object.entries(fieldToHeader).forEach(([field, aliases]) => { columns[field] = findColumnInHeaderRow(headerRow, aliases); });
+    columns.miKg = optionalColumn(findColumnAfter(headerRow, fieldToHeader.miKg, columns.customerName));
+    columns.caoKg = optionalColumn(findColumnAfter(headerRow, fieldToHeader.caoKg, columns.miKg));
+    columns.hoanhKg = optionalColumn(findColumnAfter(headerRow, fieldToHeader.hoanhKg, columns.caoKg));
+    columns.huTieu = optionalColumn(findColumnAfter(headerRow, fieldToHeader.huTieu, columns.hoanhKg));
+    columns.voBanhGoi = optionalColumn(findColumnAfter(headerRow, fieldToHeader.voBanhGoi, columns.huTieu));
+    const updates = [];
+    const add = (field, value) => {
+      const columnIndex = columns[field];
+      if (columnIndex === undefined || value === undefined) return;
+      updates.push({ range: sheetRange(mainSheetName, `${colToA1(columnIndex)}${rowNumber}`), values: [[value]] });
+    };
+    const customerResting = payload.customerResting === true || String(payload.customerResting) === "true";
+    add("orderDate", toSheetDate(payload.orderDate));
+    add("weekday", weekdayForSheet(payload.orderDate));
+    add("miKg", customerResting ? 0 : parseNumber(payload.miKg));
+    add("caoKg", customerResting ? 0 : parseNumber(payload.caoKg));
+    add("hoanhKg", customerResting ? 0 : parseNumber(payload.hoanhKg));
+    add("huTieu", customerResting ? 0 : parseNumber(payload.huTieu));
+    add("voBanhGoi", customerResting ? 0 : parseNumber(payload.voBanhGoi));
+    add("tienUng", parseNumber(payload.tienUng));
+    add("thungXop", customerResting ? 0 : parseNumber(payload.thungXop));
+    add("nhaXe", truckFromText(payload.nhaXe) || truckFromText(payload.ghiChu) || payload.nhaXe || "");
+    add("extraShipCustomer", String(payload.extraShipCustomer || "").trim());
+    add("ghiChu", [customerResting ? "Khách nghỉ" : "", noteWithoutTruck(payload.ghiChu)].filter(Boolean).join(" | "));
+    add("taxAmount", parseNumber(payload.taxAmount));
+    add("orderTotal", parseNumber(payload.orderTotal));
+    add("paid", parseNumber(payload.paid));
+    await batchUpdateValues(env, updates);
+    return json({ ok: true, rowNumber });
+  }
 
   const customer = findCustomer(customersValues, payload.customerCode);
   const { headerRowIndex } = findHeader(mainValues, MAIN_REQUIRED_HEADERS);
@@ -608,7 +936,12 @@ async function handleOrders(env, request) {
 
   const sheetDate = toSheetDate(payload.orderDate);
   const block = findCustomerBlock(mainValues, headerRowIndex, columns.customerName, customer.name);
-  const target = findTargetRow(mainValues, block, columns, sheetDate);
+  const target = block
+    ? findTargetRow(mainValues, block, columns, sheetDate)
+    : (() => {
+      const lastCustomerRow = findLastCustomerRow(mainValues, headerRowIndex, columns.customerName);
+      return { rowIndex: lastCustomerRow + 1, shouldInsert: true, copyFromRowIndex: lastCustomerRow };
+    })();
 
   if (target.shouldInsert) {
     const sheetId = await getSheetIdByTitle(env, mainSheetName);
@@ -654,14 +987,23 @@ export default {
     const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
 
     try {
+      if (pathname.startsWith("/api/")) {
+        return json({ error: "Legacy API đã ngừng hoạt động. Hãy sử dụng backend Netlify hiện tại." }, 410);
+      }
       if (pathname === "/api/login") {
         return await handleLogin(env, request);
       }
       if (pathname === "/api/customers") {
         return await handleCustomers(env, request);
       }
+      if (pathname === "/api/production-info") {
+        return await handleProductionInfo(env, request);
+      }
       if (pathname === "/api/orders") {
         return await handleOrders(env, request);
+      }
+      if (pathname === "/api/crm") {
+        return await handleCrm(env, request);
       }
       return env.ASSETS.fetch(request);
     } catch (error) {

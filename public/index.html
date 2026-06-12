@@ -3,135 +3,447 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <title>Ghi nhận số lượng</title>
+    <meta name="theme-color" content="#17352f" />
+    <title>CRM Nhà Xưởng</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/audit.css" />
   </head>
   <body>
-    <!-- Khung chính của toàn bộ màn hình nhập liệu. -->
-    <main class="shell">
-      <!-- Màn hình đăng nhập nội bộ, đúng tài khoản mới hiện form nhập liệu. -->
-      <section id="loginPanel" class="panel login-panel">
-        <div class="topbar">
-          <div>
-            <h1>Đăng nhập</h1>
-            <p>Nhập tài khoản được cấp để ghi nhận số lượng.</p>
-          </div>
+    <section id="loginPanel" class="login-screen">
+      <form id="loginForm" class="login-box">
+        <div class="brand-mark">XM</div>
+        <div>
+          <h1>CRM Nhà Xưởng</h1>
+          <p>Quản lý xưởng mì và xưởng phở trong cùng một hệ thống.</p>
         </div>
-
-        <form id="loginForm" class="form">
-          <label>
-            Tài khoản
-            <input id="loginUsername" name="username" autocomplete="username" required />
-          </label>
-          <label>
-            Mật khẩu
-            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
-          </label>
-          <button class="primary" type="submit">Đăng nhập</button>
-          <div id="loginResult" class="result" role="status"></div>
-        </form>
-      </section>
-
-      <!-- Panel trắng chứa tiêu đề và form. -->
-      <section id="appPanel" class="panel hidden">
-        <!-- Thanh đầu trang: tiêu đề, trạng thái tải khách, nút tải khách. -->
-        <div class="topbar">
-          <div>
-            <h1>Ghi nhận số lượng</h1>
-            <p id="sheetStatus">Sẵn sàng ghi nhận số lượng</p>
-            <p id="loginStatus" class="login-status"></p>
-          </div>
-          <div class="top-actions">
-            <button id="reloadCustomers" type="button">Tải khách</button>
-            <button id="logoutButton" type="button">Đăng xuất</button>
-          </div>
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="primary" type="submit">Đăng nhập</button>
+        <button id="showRegister" class="login-link" type="button">Đăng ký tài khoản giao hàng</button>
+        <div id="loginResult" class="notice" role="status"></div>
+      </form>
+      <form id="registerForm" class="login-box hidden">
+        <div class="brand-mark">XM</div>
+        <div>
+          <h1>Đăng ký tài khoản</h1>
+          <p>Tài khoản mới cần quản lý phê duyệt trước khi sử dụng.</p>
         </div>
+        <label>Họ tên<input name="displayName" autocomplete="name" required /></label>
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Mật khẩu<input name="password" type="password" autocomplete="new-password" minlength="10" required /><small>Ít nhất 10 ký tự, gồm chữ và số.</small></label>
+        <button class="primary" type="submit">Gửi đăng ký</button>
+        <button id="showLogin" class="login-link" type="button">Quay lại đăng nhập</button>
+        <div id="registerResult" class="notice" role="status"></div>
+      </form>
+    </section>
 
-        <!-- Form gửi dữ liệu lên /api/orders. -->
-        <form id="orderForm" class="form">
-          <!-- Email người nhập, được lưu lại bằng localStorage trên điện thoại. -->
-          <label>
-            Email người nhập
-            <input id="userEmail" name="userEmail" type="email" autocomplete="email" required />
-          </label>
+    <div id="appPanel" class="app hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark small">XM</span>
+          <span><strong id="sidebarFactoryName">Xưởng Mì</strong><small>Quản lý kinh doanh</small></span>
+        </div>
+        <div id="businessUnitSwitcher" class="business-unit-switcher">
+          <button type="button" data-business-unit="mi">Xưởng Mì</button>
+          <button type="button" data-business-unit="pho">Xưởng Phở</button>
+        </div>
+        <nav id="mainNav">
+          <button class="nav-item active" data-view="dashboard"><span>⌂</span>Tổng quan</button>
+          <button class="nav-item" data-view="orders"><span>＋</span>Tạo đơn</button>
+          <button class="nav-item" data-view="ledger"><span>▤</span>Sổ dữ liệu</button>
+          <button class="nav-item" data-view="customers"><span>♙</span>Khách hàng</button>
+          <button class="nav-item" data-view="production"><span>⚙</span>Thông tin SX</button>
+          <button class="nav-item" data-view="debts"><span>₫</span>Công nợ</button>
+          <button class="nav-item" data-view="reports"><span>⌁</span>Báo cáo</button>
+          <button class="nav-item" data-view="insights"><span>✦</span>Gợi ý AI</button>
+          <button class="nav-item manager-only" data-view="users"><span>♜</span>Người dùng</button>
+          <button class="nav-item manager-only" data-view="activity"><span>◷</span>Nhật ký</button>
+        </nav>
+        <div class="sidebar-user">
+          <span class="avatar" id="userAvatar">A</span>
+          <span><strong id="userName">Admin</strong><small id="userRole">Quản trị viên</small></span>
+          <button id="logoutButton" class="icon-button" title="Đăng xuất">↪</button>
+        </div>
+      </aside>
 
-          <!-- Mã khách dùng để tra trong tab DanhSachKhach. -->
-          <label>
-            Mã khách
-            <input id="customerCode" name="customerCode" list="customerCodes" autocomplete="off" required />
-            <datalist id="customerCodes"></datalist>
-          </label>
+      <main class="workspace">
+        <header class="mobile-header">
+          <div class="brand"><span class="brand-mark small">XM</span><strong id="mobileFactoryName">CRM Xưởng Mì</strong></div>
+          <button id="mobileMenu" class="icon-button" aria-label="Mở menu">☰</button>
+        </header>
 
-          <!-- Dòng xác nhận tên khách sau khi nhập mã. -->
-          <div class="customer-preview" id="customerPreview">Nhập mã khách để tra thông tin.</div>
-
-          <!-- Ô ngày: hiển thị ngày ngắn, nhưng vẫn dùng input date để bấm ra lịch. -->
-          <label>
-            Ngày đặt
-            <span class="date-field">
-              <span id="orderDateText" class="date-text">30/5/26</span>
-              <input id="orderDate" name="orderDate" type="hidden" required />
-              <input id="orderDatePicker" class="date-picker" type="date" aria-label="Ngày đặt" />
-            </span>
-          </label>
-
-          <!-- Ba ô số lượng chính, luôn hiện để nhập nhanh trên điện thoại. -->
-          <div class="grid primary-items">
-            <label>
-              Mì kg
-              <input name="miKg" inputmode="decimal" placeholder="0" />
-            </label>
-            <label>
-              Da cảo kg
-              <input name="caoKg" inputmode="decimal" placeholder="0" />
-            </label>
-            <label>
-              Da hoành kg
-              <input name="hoanhKg" inputmode="decimal" placeholder="0" />
-            </label>
+        <section id="dashboardView" class="view active">
+          <div class="page-head">
+            <div><p class="eyebrow">Hôm nay</p><h1>Tổng quan kinh doanh</h1></div>
+            <button class="primary jump-order">＋ Tạo đơn mới</button>
           </div>
+          <div id="summaryCards" class="metrics"></div>
+          <div class="dashboard-grid">
+            <section class="surface span-2">
+              <div class="section-head"><div><h2>Đơn hàng hôm nay</h2><p>Chỉ hiển thị các đơn có ngày giao là hôm nay</p></div><button class="text-button" data-jump="ledger">Xem tất cả</button></div>
+              <div class="table-wrap"><table><thead><tr><th>Ngày</th><th>Khách hàng</th><th>Mặt hàng</th><th>Tổng tiền</th><th>Còn nợ</th></tr></thead><tbody id="recentOrders"></tbody></table></div>
+            </section>
+            <section class="surface">
+              <div class="section-head"><div><h2>Cần chú ý</h2><p>Ưu tiên xử lý hôm nay</p></div></div>
+              <div id="attentionList" class="attention-list"></div>
+            </section>
+          </div>
+        </section>
 
-          <!-- Các ô ít dùng được gom vào details để bấm mở khi cần. -->
-          <details class="optional-items">
-            <summary>Thông tin thêm</summary>
-            <div class="grid">
-            <label>
-              Hủ tiếu
-              <input name="huTieu" inputmode="decimal" placeholder="0" />
-            </label>
-            <label>
-              Vỏ bánh gối
-              <input name="voBanhGoi" inputmode="decimal" placeholder="0" />
-            </label>
+        <section id="ordersView" class="view">
+          <div class="page-head"><div><p class="eyebrow">Bán hàng</p><h1>Tạo đơn mới</h1></div><span id="syncStatus" class="sync-status">Database CRM</span></div>
+          <form id="orderForm" class="order-layout">
+            <section class="surface form-surface">
+              <div class="section-head"><div><h2>Thông tin đơn</h2><p>Giá bán được lấy theo từng khách hàng</p></div></div>
+              <div class="form-grid">
+                <div class="wide customer-picker">
+                  <label>Khách hàng<select id="customerCode" name="customerCode" required><option value="">Chọn khách hàng</option></select></label>
+                  <button id="addCustomerButton" class="secondary-button" type="button">＋ Thêm khách</button>
+                </div>
+                <label>Ngày giao<input id="orderDate" name="orderDate" type="date" required /></label>
+                <label>Nhà xe<input id="nhaXe" name="nhaXe" autocomplete="off" /></label>
+                <label>Khách phụ ship<input id="extraShipCustomer" name="extraShipCustomer" autocomplete="off" placeholder="Tên khách ghép chuyến" /></label>
+                <div id="truckSuggestions" class="truck-suggestions wide hidden"></div>
+                <label class="rest-toggle wide"><input id="customerResting" name="customerResting" type="checkbox" value="true" /><span><strong>Khách nghỉ</strong><small>Tích vào để ghi nhận ngày nghỉ, tất cả số lượng sẽ bằng 0.</small></span></label>
+              </div>
+              <div id="customerContext" class="customer-context empty">Chọn khách để xem bảng giá và gợi ý.</div>
+              <div class="product-lines">
+                <div class="product-header"><span>Sản phẩm</span><span>Số lượng</span><span>Đơn giá</span><span>Thành tiền</span></div>
+                <div class="product-row" data-product="mi"><strong>Mì</strong><label><input name="miKg" inputmode="decimal" placeholder="0" /><small>kg</small></label><span class="unit-price" data-price="mi">0 ₫</span><strong data-line-total="mi">0 ₫</strong></div>
+                <div class="product-row" data-product="cao"><strong>Da cảo</strong><label><input name="caoKg" inputmode="decimal" placeholder="0" /><small>kg</small></label><span class="unit-price" data-price="cao">0 ₫</span><strong data-line-total="cao">0 ₫</strong></div>
+                <div class="product-row" data-product="hoanh"><strong>Da hoành</strong><label><input name="hoanhKg" inputmode="decimal" placeholder="0" /><small>kg</small></label><span class="unit-price" data-price="hoanh">0 ₫</span><strong data-line-total="hoanh">0 ₫</strong></div>
+                <div class="product-row" data-product="phoSoi"><strong>Phở sợi</strong><label class="quantity-unit"><input name="phoSoiKg" inputmode="decimal" placeholder="0" /><select name="phoSoiUnit" aria-label="Đơn vị phở sợi"><option value="kg">kg</option><option value="cay">cây</option></select></label><span class="unit-price" data-price="phoSoi">0 ₫</span><strong data-line-total="phoSoi">0 ₫</strong><small class="pho-conversion" id="phoSoiConversion">1 cây = 5kg</small></div>
+                <div class="product-row" data-product="phoCuon"><strong>Phở cuốn</strong><label><input name="phoCuonKg" inputmode="decimal" placeholder="0" /><small>kg</small></label><span class="unit-price" data-price="phoCuon">0 ₫</span><strong data-line-total="phoCuon">0 ₫</strong></div>
+              </div>
+              <details id="miExtraProducts">
+                <summary>Hàng khác và ghi chú</summary>
+                <div class="form-grid details-grid">
+                  <label>Hủ tiếu<input name="huTieu" inputmode="decimal" placeholder="0" /></label>
+                  <label>Vỏ bánh gối<input name="voBanhGoi" inputmode="decimal" placeholder="0" /></label>
+                  <label>Thùng xốp<input name="thungXop" inputmode="decimal" placeholder="0" /></label>
+                  <label class="wide">Ghi chú<textarea name="ghiChu" rows="3"></textarea></label>
+                </div>
+              </details>
+            </section>
+
+            <aside class="surface checkout">
+              <div class="section-head"><div><h2>Thanh toán</h2><p>Tính công nợ của đơn này</p></div></div>
+              <label>Tiền ứng chành xe<input id="tienUng" name="tienUng" inputmode="numeric" placeholder="0" /></label>
+              <label>Thuế suất
+                <select id="taxRate" name="taxRate"><option value="0">Không thuế</option><option value="5">5%</option><option value="8">8%</option><option value="10">10%</option></select>
+              </label>
+              <fieldset>
+                <legend>Người chịu thuế</legend>
+                <label class="radio"><input type="radio" name="taxPayer" value="customer" checked /><span>Khách trả thuế</span></label>
+                <label class="radio"><input type="radio" name="taxPayer" value="owner" /><span>Xưởng chịu thuế (ưu đãi)</span></label>
+              </fieldset>
+              <div class="totals">
+                <div><span>Tiền hàng</span><strong id="subtotalText">0 ₫</strong></div>
+                <div><span>Tiền thuế</span><strong id="taxText">0 ₫</strong></div>
+                <div><span>Ứng chành xe</span><strong id="advanceText">0 ₫</strong></div>
+                <div class="grand-total"><span>Khách phải trả</span><strong id="totalText">0 ₫</strong></div>
+              </div>
+              <input id="subtotal" name="subtotal" type="hidden" /><input id="taxAmount" name="taxAmount" type="hidden" /><input id="orderTotal" name="orderTotal" type="hidden" />
+              <input id="userEmail" name="userEmail" type="hidden" />
+              <div class="order-payment-actions">
+                <button class="primary debt-order-button" type="submit" name="paymentMethod" value="debt">Lưu đơn · công nợ</button>
+                <button class="payment-method-button cash-order-button" type="submit" name="paymentMethod" value="cash">Lưu đơn · tiền mặt</button>
+                <button class="payment-method-button transfer-order-button" type="submit" name="paymentMethod" value="transfer">Lưu đơn · chuyển khoản</button>
+              </div>
+              <div id="result" class="notice" role="status"></div>
+            </aside>
+          </form>
+        </section>
+
+        <section id="ledgerView" class="view">
+          <div class="page-head">
+            <div><p class="eyebrow">Toàn bộ dữ liệu</p><h1>Sổ đơn hàng</h1><p id="ledgerCount">Đang tải dữ liệu...</p></div>
+            <button id="exportLedger" class="secondary-button" type="button">↓ Xuất CSV</button>
+          </div>
+          <section class="surface ledger-filters">
+            <label>Tìm kiếm<input id="ledgerSearch" placeholder="Tên khách, mã khách, ghi chú..." /></label>
+            <label>Khách hàng<select id="ledgerCustomer"><option value="">Tất cả khách hàng</option></select></label>
+            <label>Từ ngày<input id="ledgerFrom" type="date" /></label>
+            <label>Đến ngày<input id="ledgerTo" type="date" /></label>
+            <label>Mặt hàng<select id="ledgerProduct"></select></label>
+            <button id="clearLedgerFilters" type="button">Xóa lọc</button>
+          </section>
+          <div id="ledgerTotals" class="ledger-totals"></div>
+          <div id="ledgerResult" class="notice" role="status"></div>
+          <section class="surface">
+            <div class="table-wrap"><table><thead><tr>
+              <th><button class="sort-button active" data-sort="date" type="button">Ngày <span aria-hidden="true">↓</span></button></th>
+              <th><button class="sort-button" data-sort="customerName" type="button">Khách hàng <span aria-hidden="true">↕</span></button></th>
+              <th id="ledgerProductHeader1"><button class="sort-button" data-sort="miKg" type="button">Mì <span aria-hidden="true">↕</span></button></th>
+              <th id="ledgerProductHeader2"><button class="sort-button" data-sort="caoKg" type="button">Da cảo <span aria-hidden="true">↕</span></button></th>
+              <th id="ledgerProductHeader3"><button class="sort-button" data-sort="hoanhKg" type="button">Da hoành <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="subtotal" type="button">Tiền hàng <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="taxAmount" type="button">Thuế <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="advance" type="button">Ứng xe <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="paid" type="button">Đã trả <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="debt" type="button">Còn lại <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="truck" type="button">Nhà xe <span aria-hidden="true">↕</span></button></th>
+              <th>Thao tác</th>
+              <th><button class="sort-button" data-sort="extraShipCustomer" type="button">Khách phụ ship <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="customerResting" type="button">Khách nghỉ <span aria-hidden="true">↕</span></button></th>
+              <th><button class="sort-button" data-sort="note" type="button">Ghi chú <span aria-hidden="true">↕</span></button></th>
+            </tr></thead><tbody id="ledgerTable"></tbody></table></div>
+            <div class="pagination"><button id="ledgerPrev" type="button">‹ Trước</button><span id="ledgerPage"></span><button id="ledgerNext" type="button">Sau ›</button></div>
+          </section>
+        </section>
+
+        <section id="customersView" class="view">
+          <div class="page-head"><div><p class="eyebrow">Quan hệ khách hàng</p><h1>Thống kê từng khách</h1><p>Theo dõi doanh số, tiền đã thu và công nợ của từng khách hàng.</p></div><input id="customerSearch" class="search" placeholder="Tìm mã hoặc tên khách..." /></div>
+          <div class="surface"><div class="table-wrap"><table><thead><tr><th>Khách hàng</th><th>Số đơn</th><th>Tiền hàng</th><th>Đã thu</th><th>Còn nợ</th><th>Đơn gần nhất</th><th>Nhà xe</th><th>Thao tác</th></tr></thead><tbody id="customerTable"></tbody></table></div></div>
+        </section>
+
+        <section id="productionView" class="view">
+          <div class="page-head">
+            <div><p class="eyebrow">Tài liệu vận hành</p><h1>Thông tin sản xuất</h1><p id="productionInfoTitle">Quy cách và thông tin giao hàng theo khách.</p></div>
+            <div class="page-actions">
+              <button id="addProductionInfo" class="primary" type="button">＋ Thêm thông tin SX</button>
+              <button id="syncProductionCustomers" class="secondary-button" type="button">Khớp khách CRM</button>
             </div>
-          </details>
+          </div>
+          <section class="surface production-filters">
+            <label>Tìm khách hàng<input id="productionSearch" placeholder="Mã khách, tên, nơi gửi..." /></label>
+            <label>Nhóm thông tin<select id="productionFilter"><option value="">Tất cả thông tin</option><option value="production">Có hướng dẫn sản xuất</option><option value="delivery">Có nơi gửi</option><option value="invoice">Có thông tin hóa đơn</option></select></label>
+          </section>
+          <div class="production-summary">
+            <span id="productionCount"></span>
+            <div class="production-sync-counts"><strong id="productionLinkedCount"></strong><strong id="productionUnlinkedCount"></strong></div>
+            <small>Dữ liệu CRM nội bộ</small>
+          </div>
+          <section class="surface">
+            <div class="table-wrap"><table class="production-table"><thead><tr><th>Khách hàng</th><th>Liên kết CRM</th><th>Số lượng thường lấy</th><th>Hướng dẫn sản xuất</th><th>Nơi gửi</th><th></th></tr></thead><tbody id="productionTable"></tbody></table></div>
+          </section>
+        </section>
 
-          <!-- Nhà xe: có thể tự điền từ khách, hoặc người nhập sửa lại. -->
-          <label>
-            Nhà xe
-            <input name="nhaXe" id="nhaXe" list="nhaXeList" autocomplete="off" />
-            <datalist id="nhaXeList">
-              <option value="Huệ Nghĩa"></option>
-              <option value="Tư Nhiều"></option>
-              <option value="bảy"></option>
-              <option value="nghỉ"></option>
-            </datalist>
-          </label>
+        <section id="debtsView" class="view">
+          <div class="page-head"><div><p class="eyebrow">Dòng tiền</p><h1>Theo dõi công nợ</h1><p>Chọn khách để xem chi tiết hoặc ghi nhận khoản thanh toán mới.</p></div><div class="page-actions"><input id="debtSearch" class="search" placeholder="Tìm khách đang nợ..." /><button id="exportDebtsExcel" class="secondary-button" type="button">↓ Xuất Excel công nợ</button></div></div>
+          <div id="debtSummary" class="debt-summary"></div>
+          <div class="surface"><div class="table-wrap"><table><thead><tr><th>Khách hàng</th><th>Số đơn</th><th>Tiền hàng</th><th>Đã thu</th><th>Còn nợ</th><th>Đơn cuối</th><th>Mức độ</th><th>Thao tác</th></tr></thead><tbody id="debtTable"></tbody></table></div></div>
+        </section>
 
-          <!-- Ghi chú nội bộ, tách riêng với nhà xe. -->
-          <label>
-            Ghi chú
-            <textarea name="ghiChu" rows="3"></textarea>
-          </label>
+        <section id="reportsView" class="view">
+          <div class="page-head"><div><p class="eyebrow">Phân tích kinh doanh</p><h1>Báo cáo doanh thu</h1><p>Theo dõi doanh thu và tỷ trọng của từng khách hàng.</p></div></div>
+          <section class="surface report-filters">
+            <label>Khách hàng<select id="reportCustomer"><option value="">Tất cả khách hàng</option></select></label>
+            <label>Từ ngày<input id="reportFrom" type="date" /></label>
+            <label>Đến ngày<input id="reportTo" type="date" /></label>
+            <fieldset class="report-period"><legend>Nhóm dữ liệu</legend><div>
+              <label><input type="radio" name="reportPeriod" value="day" checked /><span>Ngày</span></label>
+              <label><input type="radio" name="reportPeriod" value="month" /><span>Tháng</span></label>
+              <label><input type="radio" name="reportPeriod" value="year" /><span>Năm</span></label>
+            </div></fieldset>
+            <button id="clearReportFilters" type="button">Xóa lọc</button>
+          </section>
+          <div id="reportMetrics" class="report-metrics"></div>
+          <div class="report-grid">
+            <section class="surface report-chart-panel">
+              <div class="section-head"><div><h2 id="reportChartTitle">Doanh thu theo ngày</h2><p id="reportChartSubtitle"></p></div></div>
+              <div id="revenueLineChart" class="line-chart" role="img" aria-label="Biểu đồ đường doanh thu"></div>
+            </section>
+            <section class="surface report-customer-panel">
+              <div class="section-head"><div><h2>Chi tiết khách hàng</h2><p id="reportCustomerSubtitle">Toàn bộ khách hàng</p></div></div>
+              <div id="customerRevenueShare" class="revenue-share"></div>
+              <div id="reportProductMix" class="product-mix"></div>
+            </section>
+          </div>
+          <section class="surface report-ranking">
+            <div class="section-head"><div><h2>Tỷ trọng doanh thu theo khách</h2><p>Khách lấy hàng chiếm bao nhiêu phần trăm doanh thu.</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Hạng</th><th>Khách hàng</th><th>Số đơn</th><th>Doanh thu</th><th>Tỷ trọng</th><th id="reportProductHeader1">Mì</th><th id="reportProductHeader2">Da cảo</th><th id="reportProductHeader3">Da hoành</th><th>Còn nợ</th></tr></thead><tbody id="reportCustomerTable"></tbody></table></div>
+          </section>
+        </section>
 
-          <!-- Nút submit form. -->
-          <button class="primary" type="submit">Lưu</button>
-          <!-- Nơi hiện thông báo thành công/lỗi. -->
-          <div id="result" class="result" role="status"></div>
-        </form>
-      </section>
-    </main>
-    <!-- File JavaScript xử lý form, tải khách, gọi API. -->
+        <section id="insightsView" class="view">
+          <div class="page-head"><div><p class="eyebrow">Trợ lý bán hàng</p><h1>Gợi ý AI</h1><p>Phân tích chu kỳ và số lượng từ lịch sử mua thực tế.</p></div></div>
+          <div id="insightGrid" class="insight-grid"></div>
+        </section>
+
+        <section id="usersView" class="view">
+          <div class="page-head"><div><p class="eyebrow">Bảo mật và phân quyền</p><h1>Quản lý người dùng</h1><p>Duyệt tài khoản giao hàng, cấp quyền quản lý hoặc khóa truy cập.</p></div></div>
+          <div id="userApprovalSummary" class="debt-summary"></div>
+          <section class="surface">
+            <div class="table-wrap"><table class="user-management-table"><thead><tr><th>Người dùng</th><th>Vai trò</th><th>Trạng thái</th><th>Phân hệ</th><th>Ngày đăng ký</th><th>Đăng nhập cuối</th><th>Thao tác</th></tr></thead><tbody id="userTable"></tbody></table></div>
+          </section>
+          <div id="userManagementResult" class="notice" role="status"></div>
+        </section>
+
+        <section id="activityView" class="view">
+          <div class="page-head">
+            <div><p class="eyebrow">Kiểm soát hệ thống</p><h1>Nhật ký hoạt động</h1><p>Xem ai đăng nhập, ai thay đổi dữ liệu và nội dung trước/sau khi chỉnh sửa.</p></div>
+            <button id="refreshAudit" class="secondary-button" type="button">Làm mới</button>
+          </div>
+          <div id="auditSummary" class="debt-summary"></div>
+          <section class="surface audit-filters">
+            <label>Tìm người hoặc nội dung<input id="auditSearch" placeholder="Tên, email, khách hàng, mã đơn..." /></label>
+            <label>Bộ lọc chính<select id="auditGroup">
+              <option value="data" selected>Thay đổi dữ liệu</option>
+              <option value="session">Đăng nhập / đăng xuất</option>
+              <option value="all">Tất cả hoạt động</option>
+            </select></label>
+            <label>Đăng nhập / đăng xuất<select id="auditSession">
+              <option value="">Tất cả trạng thái</option>
+              <option value="user-login">Đăng nhập</option>
+              <option value="logout">Đăng xuất / đóng tab</option>
+            </select></label>
+            <label>Tài khoản<select id="auditAccount"><option value="">Tất cả tài khoản</option></select></label>
+          </section>
+          <p id="auditCount" class="audit-count"></p>
+          <section class="surface">
+            <div class="table-wrap"><table class="audit-table"><thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hoạt động</th><th>Nội dung</th></tr></thead><tbody id="auditTable"></tbody></table></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="customerDialog">
+      <form id="customerEditForm" method="dialog">
+        <div class="section-head"><div><h2>Cập nhật bảng giá</h2><p id="editCustomerName"></p></div><button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button></div>
+        <input name="MaKH" type="hidden" />
+        <div class="form-grid">
+          <label>Tên khách<input name="TenKH" required /></label>
+          <label>Nhà xe mặc định<input name="NhaXeMacDinh" /></label>
+          <label>Giá mì<input name="GiaMi" inputmode="numeric" data-money-input /></label>
+          <label>Giá da cảo<input name="GiaCao" inputmode="numeric" data-money-input /></label>
+          <label>Giá da hoành<input name="GiaHoanh" inputmode="numeric" data-money-input /></label>
+          <label>Giá phở sợi<input name="GiaPhoSoi" inputmode="numeric" data-money-input /></label>
+          <label>Giá phở cuốn<input name="GiaPhoCuon" inputmode="numeric" data-money-input /></label>
+          <label>Thuế mặc định<select name="ThueSuat"><option value="0">Không thuế</option><option value="5">5%</option><option value="8">8%</option><option value="10">10%</option></select></label>
+        </div>
+        <div id="editResult" class="notice"></div>
+        <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button class="primary" type="submit">Lưu thay đổi</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="customerCreateDialog">
+      <form id="customerCreateForm">
+        <div class="section-head"><div><h2>Thêm khách hàng</h2><p>Tạo khách mới và bảng giá riêng.</p></div><button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button></div>
+        <div class="form-grid">
+          <label>Mã khách<input name="MaKH" placeholder="Ví dụ: m70" required /></label>
+          <label>Tên khách<input name="TenKH" placeholder="Tên khách hàng" required /></label>
+          <label>Giá mì<input name="GiaMi" inputmode="numeric" placeholder="0" data-money-input /></label>
+          <label>Giá da cảo<input name="GiaCao" inputmode="numeric" placeholder="0" data-money-input /></label>
+          <label>Giá da hoành<input name="GiaHoanh" inputmode="numeric" placeholder="0" data-money-input /></label>
+          <label>Giá phở sợi<input name="GiaPhoSoi" inputmode="numeric" placeholder="0" data-money-input /></label>
+          <label>Giá phở cuốn<input name="GiaPhoCuon" inputmode="numeric" placeholder="0" data-money-input /></label>
+          <label>Nhà xe mặc định<input name="NhaXeMacDinh" /></label>
+          <label>Thuế mặc định<select name="ThueSuat"><option value="0">Không thuế</option><option value="5">5%</option><option value="8">8%</option><option value="10">10%</option></select></label>
+        </div>
+        <input name="productionInfoId" type="hidden" />
+        <section id="customerMatchSuggestions" class="match-suggestions hidden">
+          <div class="match-suggestion-head"><div><strong>✦ Nhận diện thông tin sản xuất</strong><small>CRM tìm thấy hồ sơ có thể thuộc khách này.</small></div><button id="clearCustomerMatch" class="text-button" type="button">Bỏ liên kết</button></div>
+          <div id="customerMatchList" class="match-suggestion-list"></div>
+        </section>
+        <div id="createCustomerResult" class="notice"></div>
+        <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button class="primary" type="submit">Thêm khách hàng</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="customerProfileDialog" class="profile-dialog customer-profile-dialog">
+      <div class="profile-shell">
+        <div class="section-head"><div><p class="eyebrow">Hồ sơ khách hàng</p><h2 id="profileCustomerName"></h2><p id="profileCustomerCode"></p></div><button id="closeCustomerProfile" class="icon-button" type="button" aria-label="Đóng">×</button></div>
+        <div id="profileMetrics" class="profile-metrics"></div>
+        <div class="profile-prices" id="profilePrices"></div>
+        <div class="profile-history-head"><div><h3>Lịch sử giao dịch</h3><p id="profileOrderCount"></p></div><div class="row-actions"><button id="profilePayment" class="primary payment-button" type="button">₫ Ghi nhận thanh toán</button><button id="profileProductionInfo" class="secondary-button hidden" type="button">Thông tin SX</button><button id="profileCreateOrder" class="secondary-button" type="button">＋ Tạo đơn</button></div></div>
+        <div class="table-wrap profile-table"><table><thead><tr><th>Ngày</th><th>Mặt hàng</th><th>Tiền hàng</th><th>Thuế</th><th>Đã trả</th><th>Còn lại</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody id="profileOrders"></tbody></table></div>
+        <div id="profilePayments" class="profile-payments"></div>
+      </div>
+    </dialog>
+
+    <dialog id="paymentDialog">
+      <form id="paymentForm">
+        <div class="section-head"><div><p class="eyebrow">Cập nhật công nợ</p><h2 id="paymentCustomerName"></h2><p id="paymentCustomerDebt"></p></div><button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button></div>
+        <input name="customerCode" type="hidden" />
+        <div class="form-grid">
+          <label>Số tiền khách trả<input name="amount" inputmode="numeric" data-money-input required /></label>
+          <label>Ngày thanh toán<input name="date" type="date" required /></label>
+          <label class="wide">Ghi chú<input name="note" placeholder="Ví dụ: chuyển khoản, tiền mặt..." /></label>
+        </div>
+        <div class="payment-explain">Khoản thu sẽ tự trừ vào các đơn còn nợ cũ nhất của khách hàng.</div>
+        <div id="paymentResult" class="notice"></div>
+        <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button class="primary" type="submit">Xác nhận đã thu</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="productionInfoDialog" class="profile-dialog">
+      <div class="profile-shell">
+        <div class="section-head"><div><p class="eyebrow">Thông tin sản xuất</p><h2 id="productionDetailCustomer"></h2><p id="productionDetailRow"></p></div><button id="closeProductionInfo" class="icon-button" type="button" aria-label="Đóng">×</button></div>
+        <div id="productionDetail" class="production-detail"></div>
+      </div>
+    </dialog>
+
+    <dialog id="productionEditDialog" class="profile-dialog">
+      <form id="productionEditForm" class="profile-shell">
+        <div class="section-head"><div><p id="productionEditEyebrow" class="eyebrow">Chỉnh sửa thông tin SX</p><h2 id="productionEditTitle"></h2><p>Dữ liệu đang được quản lý trong CRM nội bộ.</p></div><button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button></div>
+        <input name="id" type="hidden" />
+        <div class="form-grid">
+          <label class="wide">Liên kết khách hàng CRM<select name="customerCode"><option value="">Chưa liên kết</option></select></label>
+          <label class="wide">Tên hiển thị trong thông tin SX<input name="customer" required /></label>
+          <label class="wide">Số lượng thường lấy<textarea name="usualOrder" rows="4"></textarea></label>
+          <label class="wide">Hướng dẫn sản xuất<textarea name="production" rows="5"></textarea></label>
+          <label class="wide">Nơi gửi<textarea name="delivery" rows="4"></textarea></label>
+          <label class="wide">Thông tin bổ sung<textarea name="additional" rows="5"></textarea></label>
+          <label class="wide">Thông tin xuất hóa đơn<textarea name="invoice" rows="6"></textarea></label>
+        </div>
+        <div id="productionEditResult" class="notice"></div>
+        <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button id="saveProductionInfo" class="primary" type="submit">Lưu thông tin</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="orderEditDialog" class="profile-dialog">
+      <form id="orderEditForm" class="profile-shell">
+        <div class="section-head">
+          <div><p class="eyebrow">Điều chỉnh giao dịch</p><h2 id="editOrderTitle"></h2><p id="editOrderSubtitle"></p></div>
+          <button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button>
+        </div>
+        <input name="rowId" type="hidden" />
+        <input name="sourceOrderId" type="hidden" />
+        <div class="form-grid">
+          <label>Ngày giao<input name="orderDate" type="date" required /></label>
+          <label>Nhà xe<input name="nhaXe" /></label>
+          <label>Khách phụ ship<input name="extraShipCustomer" placeholder="Tên khách ghép chuyến" /></label>
+          <label class="rest-toggle wide"><input name="customerResting" type="checkbox" value="true" /><span><strong>Khách nghỉ</strong><small>Khi tích, toàn bộ số lượng hàng hóa bằng 0.</small></span></label>
+          <label>Mì kg<input name="miKg" inputmode="decimal" /></label>
+          <label>Da cảo kg<input name="caoKg" inputmode="decimal" /></label>
+          <label>Da hoành kg<input name="hoanhKg" inputmode="decimal" /></label>
+          <label>Phở sợi<div class="edit-quantity-unit"><input name="phoSoiKg" inputmode="decimal" /><select name="phoSoiUnit" aria-label="Đơn vị phở sợi"><option value="kg">kg</option><option value="cay">cây</option></select></div><small id="editPhoSoiConversion">1 cây = 5kg</small></label>
+          <label>Phở cuốn kg<input name="phoCuonKg" inputmode="decimal" /></label>
+          <label>Hủ tiếu<input name="huTieu" inputmode="decimal" /></label>
+          <label>Vỏ bánh gối<input name="voBanhGoi" inputmode="decimal" /></label>
+          <label>Thùng xốp<input name="thungXop" inputmode="decimal" /></label>
+          <label>Tiền ứng<input name="tienUng" inputmode="numeric" /></label>
+          <label>Thuế suất<select name="taxRate"><option value="0">Không thuế</option><option value="5">5%</option><option value="8">8%</option><option value="10">10%</option></select></label>
+          <label>Đã thanh toán<input name="paid" inputmode="numeric" /></label>
+          <label class="wide">Ghi chú<textarea name="ghiChu" rows="3"></textarea></label>
+        </div>
+        <div class="edit-totals" id="editOrderTotals"></div>
+        <input name="subtotal" type="hidden" /><input name="taxAmount" type="hidden" /><input name="orderTotal" type="hidden" />
+        <div id="orderEditResult" class="notice"></div>
+        <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button id="saveOrderEdit" class="primary" type="submit">Lưu giao dịch</button></div>
+      </form>
+    </dialog>
+
+    <button id="aiChatButton" class="ai-chat-button hidden" type="button" aria-label="Mở Chat AI">
+      <span>✦</span><strong>Chat AI</strong>
+    </button>
+    <aside id="aiChatPanel" class="ai-chat-panel" aria-hidden="true">
+      <header>
+        <div><span class="ai-chat-symbol">✦</span><span><strong>Trợ lý nhập đơn</strong><small>Nhập câu tự nhiên để ghi đơn nhanh</small></span></div>
+        <button id="closeAiChat" class="icon-button" type="button" aria-label="Đóng">×</button>
+      </header>
+      <div id="aiChatMessages" class="ai-chat-messages">
+        <div class="chat-message assistant">
+          <p>Nhập như: <strong>8/6/23 m23 4kg cảo + 2kg hoành</strong></p>
+          <small>“Cảo” là da cảo, “hoành” là da hoành thánh. Không nhập ngày thì AI dùng ngày hôm nay.</small>
+        </div>
+      </div>
+      <form id="aiChatForm" class="ai-chat-form">
+        <textarea id="aiChatInput" rows="2" placeholder="Nhập đơn hàng..." required></textarea>
+        <button class="primary" type="submit" aria-label="Phân tích câu lệnh">➤</button>
+      </form>
+    </aside>
     <script src="/app.js"></script>
   </body>
 </html>

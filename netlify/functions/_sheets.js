@@ -11,14 +11,11 @@ const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 // URL gốc của Google Sheets API.
 const SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets";
+// CRM dùng dữ liệu độc lập; không kết nối hay đọc lại Google Sheets.
+const GOOGLE_SHEETS_CONNECTED = false;
 
 // Đọc file .env khi chạy local bằng npm run dev.
 function loadLocalEnv() {
-  // Nếu đã có env rồi thì không cần đọc lại.
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
-    return;
-  }
-
   // File .env nằm ở thư mục gốc dự án.
   const envPath = path.join(process.cwd(), ".env");
   // Nếu không có file .env thì bỏ qua.
@@ -48,8 +45,8 @@ function loadLocalEnv() {
     if (value.startsWith('"') && value.endsWith('"')) {
       value = JSON.parse(value);
     }
-    // Gán biến môi trường cho Node sử dụng.
-    process.env[key] = value;
+    // Không ghi đè biến đã được hệ thống triển khai cấp.
+    if (process.env[key] === undefined) process.env[key] = value;
   });
 }
 
@@ -149,6 +146,10 @@ async function getAccessToken() {
 
 // Hàm gọi Google Sheets API chung cho mọi request.
 async function googleRequest(path, options = {}) {
+  if (!GOOGLE_SHEETS_CONNECTED) {
+    throw new Error("Google Sheets đang tạm ngắt kết nối.");
+  }
+
   // Lấy access token trước khi gọi API.
   const token = await getAccessToken();
   // Gọi Google Sheets API với Sheet ID trong env.
@@ -286,7 +287,7 @@ function normalizeText(value) {
 // Parse số lượng người dùng nhập.
 function parseNumber(value) {
   // Cho phép nhập 31,5 hoặc 31.5.
-  const raw = String(value || "").trim().replace(",", ".");
+  const raw = String(value ?? "").trim().replace(",", ".");
   // Nếu bỏ trống thì trả chuỗi rỗng để không ghi số.
   if (!raw) {
     return "";
@@ -417,6 +418,7 @@ function assertAllowedUser(email) {
 module.exports = {
   assertAllowedUser,
   batchUpdate,
+  loadLocalEnv,
   batchUpdateValues,
   colToA1,
   dateKey,

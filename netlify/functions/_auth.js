@@ -1,115 +1,161 @@
-// Module crypto dùng để hash password và ký token đăng nhập.
 const crypto = require("crypto");
-// Dùng jsonResponse để trả lỗi JSON thống nhất.
-const { jsonResponse } = require("./_sheets");
+const { readDatabase } = require("./_database");
+const { jsonResponse, loadLocalEnv } = require("./_sheets");
 
-// Salt dùng để hash password trong file này.
-const PASSWORD_SALT = "nhap-lieu-mi-v1";
-// Secret dùng để ký token đăng nhập; khi deploy nên đổi bằng env APP_AUTH_SECRET.
-const TOKEN_SECRET = process.env.APP_AUTH_SECRET || "doi-secret-nay-khi-deploy";
-// Token có hiệu lực trong 7 ngày.
-const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+loadLocalEnv();
 
-// Danh sách tài khoản nội bộ.
-// Password không lưu dạng chữ thường, chỉ lưu hash.
-// Muốn đổi password: tạo hash mới bằng hàm hashPassword rồi thay passwordHash.
-const USERS = [
-  {
-    username: "admin",
-    displayName: "Admin",
-    role: "admin",
-    email: "admin@noi-bo.local",
-    passwordHash: "f7c06128217e70cb4a0c42dbd9d860dc5b6ffb763309216bd6b83431a40d6c77",
-  },
-  {
-    username: "nhanvien",
-    displayName: "Nhân viên",
-    role: "staff",
-    email: "nhanvien@noi-bo.local",
-    passwordHash: "4db228f47130c8c6a6e90ae746f486e18047dd66933f08ae381ad13fa18e4a5b",
-  },
-];
+const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const DEVELOPMENT_SECRET = crypto.randomBytes(32).toString("hex");
 
-// Hash password theo cùng cách đã dùng để tạo passwordHash.
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(`${PASSWORD_SALT}|${password}`).digest("hex");
+function authError(message, statusCode = 401) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
 }
 
-// Chuyển dữ liệu sang base64url để làm token.
+function tokenSecret() {
+  if (process.env.APP_AUTH_SECRET) return process.env.APP_AUTH_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    throw authError("Máy chủ chưa cấu hình APP_AUTH_SECRET.", 500);
+  }
+  return DEVELOPMENT_SECRET;
+}
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+}
+
+function validatePassword(password) {
+  const value = String(password || "");
+  return value.length >= 10 && /[a-zA-Z]/.test(value) && /\d/.test(value);
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, encoded) {
+  const [algorithm, salt, expected] = String(encoded || "").split("$");
+  if (algorithm !== "scrypt" || !salt || !expected) return false;
+  const actual = crypto.scryptSync(String(password), salt, 64);
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return actual.length === expectedBuffer.length && crypto.timingSafeEqual(actual, expectedBuffer);
+}
+
 function base64Url(input) {
-  return Buffer.from(input)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+  return Buffer.from(input).toString("base64url");
 }
 
-// Ký dữ liệu token để người dùng không tự sửa username/role được.
 function signPayload(payload) {
-  return crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest("base64url");
+  return crypto.createHmac("sha256", tokenSecret()).update(payload).digest("base64url");
 }
 
-// Tạo token đăng nhập cho user.
-function createSessionToken(user) {
-  const payload = {
-    username: user.username,
+function publicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
     displayName: user.displayName,
     role: user.role,
+    status: user.status,
+    createdAt: user.createdAt,
+    approvedAt: user.approvedAt || "",
+    lastLoginAt: user.lastLoginAt || "",
+    businessUnits: Array.isArray(user.businessUnits) && user.businessUnits.length
+      ? user.businessUnits
+      : ["mi", "pho"],
+  };
+}
+
+function requireBusinessUnit(user, value) {
+  const businessUnit = ["mi", "pho"].includes(String(value || "").toLowerCase())
+    ? String(value).toLowerCase()
+    : "mi";
+  if (!(user.businessUnits || ["mi", "pho"]).includes(businessUnit)) {
+    throw authError("Tài khoản không có quyền truy cập phân hệ này.", 403);
+  }
+  return businessUnit;
+}
+
+function createSessionToken(user) {
+  const payload = {
+    sub: user.id,
     email: user.email,
+    role: user.role,
+    tokenVersion: Number(user.tokenVersion || 0),
     exp: Date.now() + TOKEN_TTL_MS,
   };
   const encodedPayload = base64Url(JSON.stringify(payload));
-  const signature = signPayload(encodedPayload);
-  return `${encodedPayload}.${signature}`;
+  return `${encodedPayload}.${signPayload(encodedPayload)}`;
 }
 
-// Xác minh token đăng nhập.
 function verifySessionToken(token) {
-  if (!token || !token.includes(".")) {
-    throw new Error("Vui lòng đăng nhập trước khi ghi nhận số lượng.");
-  }
-
+  if (!token || !token.includes(".")) throw authError("Vui lòng đăng nhập.");
   const [encodedPayload, signature] = token.split(".");
   const expectedSignature = signPayload(encodedPayload);
-
-  if (Buffer.byteLength(signature) !== Buffer.byteLength(expectedSignature)) {
-    throw new Error("Phiên đăng nhập không hợp lệ.");
+  if (
+    signature.length !== expectedSignature.length
+    || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))
+  ) {
+    throw authError("Phiên đăng nhập không hợp lệ.");
   }
-
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
-    throw new Error("Phiên đăng nhập không hợp lệ.");
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  } catch {
+    throw authError("Phiên đăng nhập không hợp lệ.");
   }
-
-  const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
   if (!payload.exp || payload.exp < Date.now()) {
-    throw new Error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
+    throw authError("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
   }
-
   return payload;
 }
 
-// Lấy token từ header Authorization: Bearer ...
 function getBearerToken(event) {
   const headers = event.headers || {};
-  const authorization = headers.authorization || headers.Authorization || "";
-  return authorization.replace(/^Bearer\s+/i, "").trim();
+  return String(headers.authorization || headers.Authorization || "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
 }
 
-// Kiểm tra request đã đăng nhập chưa.
 function requireAuth(event) {
-  const token = getBearerToken(event);
-  return verifySessionToken(token);
+  const payload = verifySessionToken(getBearerToken(event));
+  const user = (readDatabase().users || []).find((item) => Number(item.id) === Number(payload.sub));
+  if (!user || user.status !== "active") {
+    throw authError("Tài khoản chưa được duyệt hoặc đã bị khóa.", 403);
+  }
+  if (Number(user.tokenVersion || 0) !== Number(payload.tokenVersion || 0)) {
+    throw authError("Quyền tài khoản đã thay đổi, vui lòng đăng nhập lại.");
+  }
+  return publicUser(user);
 }
 
-// Middleware đơn giản: nếu chưa login thì trả lỗi 401.
+function requireRole(event, roles) {
+  const user = requireAuth(event);
+  const allowed = Array.isArray(roles) ? roles : [roles];
+  if (!allowed.includes(user.role)) throw authError("Bạn không có quyền thực hiện thao tác này.", 403);
+  return user;
+}
+
 function authErrorResponse(error) {
-  return jsonResponse(401, { error: error.message });
+  return jsonResponse(error.statusCode || 401, { error: error.message });
 }
 
 module.exports = {
-  USERS,
+  authError,
   authErrorResponse,
   createSessionToken,
   hashPassword,
+  normalizeEmail,
+  publicUser,
+  requireBusinessUnit,
   requireAuth,
+  requireRole,
+  validateEmail,
+  validatePassword,
+  verifyPassword,
 };

@@ -1,46 +1,83 @@
-// Import danh sách user và hàm tạo token.
 const {
-  USERS,
   createSessionToken,
-  hashPassword,
+  normalizeEmail,
+  publicUser,
+  verifyPassword,
 } = require("./_auth");
-// Import helper trả JSON.
-const { jsonResponse, normalizeText } = require("./_sheets");
+const { appendAudit, normalizeText, updateDatabase } = require("./_database");
+const { jsonResponse } = require("./_sheets");
 
-// API /api/login dùng để đăng nhập username/password nội bộ.
-exports.handler = async (event) => {
-  // Chỉ cho phép POST.
-  if (event.httpMethod !== "POST") {
-    return jsonResponse(405, { error: "Method not allowed" });
+const attempts = new Map();
+
+function clientKey(event, email) {
+  const headers = event.headers || {};
+  const ip = String(headers["x-forwarded-for"] || headers["client-ip"] || "local").split(",")[0].trim();
+  return `${ip}|${email}`;
+}
+
+function checkRateLimit(key) {
+  const now = Date.now();
+  const current = attempts.get(key);
+  if (!current || current.resetAt <= now) {
+    attempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return;
   }
+  current.count += 1;
+  if (current.count > 8) {
+    const error = new Error("Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.");
+    error.statusCode = 429;
+    throw error;
+  }
+}
 
+function clearRateLimit(key) {
+  attempts.delete(key);
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
   try {
-    // Đọc username/password từ frontend.
     const payload = JSON.parse(event.body || "{}");
-    const username = normalizeText(payload.username);
+    const email = normalizeEmail(payload.email);
     const password = String(payload.password || "");
+    const key = clientKey(event, email);
+    checkRateLimit(key);
 
-    // Tìm tài khoản theo username.
-    const user = USERS.find((item) => normalizeText(item.username) === username);
-    // Nếu sai username hoặc password thì báo chung một câu.
-    if (!user || user.passwordHash !== hashPassword(password)) {
-      return jsonResponse(401, { error: "Sai tài khoản hoặc mật khẩu." });
-    }
-
-    // Tạo token đăng nhập.
-    const token = createSessionToken(user);
-    // Trả token và thông tin hiển thị về frontend.
-    return jsonResponse(200, {
-      token,
-      user: {
-        username: user.username,
-        displayName: user.displayName,
-        role: user.role,
-        email: user.email,
-      },
+    const result = await updateDatabase((database) => {
+      const user = (database.users || []).find((item) => normalizeText(item.email) === normalizeText(email));
+      if (!user || !verifyPassword(password, user.passwordHash)) {
+        const error = new Error("Email hoặc mật khẩu không đúng.");
+        error.statusCode = 401;
+        throw error;
+      }
+      if (user.status === "pending") {
+        const error = new Error("Tài khoản đang chờ quản lý phê duyệt.");
+        error.statusCode = 403;
+        throw error;
+      }
+      if (user.status !== "active") {
+        const error = new Error("Tài khoản đã bị khóa.");
+        error.statusCode = 403;
+        throw error;
+      }
+      user.lastLoginAt = new Date().toISOString();
+      appendAudit(database, {
+        action: "user-login",
+        actorUserId: user.id,
+        actorEmail: user.email,
+        actorName: user.displayName,
+        summary: `${user.displayName} đăng nhập hệ thống.`,
+        details: {
+          role: user.role,
+          ip: clientKey(event, email).split("|")[0],
+          userAgent: String(event.headers?.["user-agent"] || event.headers?.["User-Agent"] || ""),
+        },
+      });
+      return { token: createSessionToken(user), user: publicUser(user) };
     });
+    clearRateLimit(key);
+    return jsonResponse(200, result);
   } catch (error) {
-    // Nếu JSON lỗi hoặc lỗi khác thì trả 400.
-    return jsonResponse(400, { error: error.message });
+    return jsonResponse(error.statusCode || 400, { error: error.message });
   }
 };
