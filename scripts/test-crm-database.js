@@ -165,7 +165,7 @@ async function main() {
   });
   await call(logout.handler, "POST", { reason: "page-exit" });
   await call(logout.handler, "POST", { reason: "explicit-logout" });
-  token = createSessionToken(readDatabase().users.find((user) => user.id === manager.id));
+  token = createSessionToken((await readDatabase()).users.find((user) => user.id === manager.id));
   const after = await call(crm.handler, "GET");
   const phoResponse = await crm.handler({
     httpMethod: "GET",

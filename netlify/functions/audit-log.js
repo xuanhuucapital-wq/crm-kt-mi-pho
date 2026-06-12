@@ -4,9 +4,9 @@ const { jsonResponse } = require("./_sheets");
 
 exports.handler = async (event) => {
   try {
-    const manager = requireRole(event, "manager");
+    const manager = await requireRole(event, "manager");
     if (event.httpMethod !== "GET") return jsonResponse(405, { error: "Method not allowed" });
-    const database = readDatabase();
+    const database = await readDatabase();
     const businessUnit = requireBusinessUnit(manager, event.queryStringParameters?.businessUnit);
     const query = normalizeText(event.queryStringParameters?.search || "");
     const action = String(event.queryStringParameters?.action || "").trim();

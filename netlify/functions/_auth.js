@@ -122,9 +122,10 @@ function getBearerToken(event) {
     .trim();
 }
 
-function requireAuth(event) {
+async function requireAuth(event) {
   const payload = verifySessionToken(getBearerToken(event));
-  const user = (readDatabase().users || []).find((item) => Number(item.id) === Number(payload.sub));
+  const database = await readDatabase();
+  const user = (database.users || []).find((item) => Number(item.id) === Number(payload.sub));
   if (!user || user.status !== "active") {
     throw authError("Tài khoản chưa được duyệt hoặc đã bị khóa.", 403);
   }
@@ -134,8 +135,8 @@ function requireAuth(event) {
   return publicUser(user);
 }
 
-function requireRole(event, roles) {
-  const user = requireAuth(event);
+async function requireRole(event, roles) {
+  const user = await requireAuth(event);
   const allowed = Array.isArray(roles) ? roles : [roles];
   if (!allowed.includes(user.role)) throw authError("Bạn không có quyền thực hiện thao tác này.", 403);
   return user;

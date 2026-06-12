@@ -142,10 +142,10 @@ async function phoDebtWorkbook(workbook, outstandingOrders) {
 exports.handler = async (event) => {
   if (event.httpMethod !== "GET") return jsonResponse(405, { error: "Method not allowed" });
   try {
-    const manager = requireRole(event, "manager");
+    const manager = await requireRole(event, "manager");
     const businessUnit = requireBusinessUnit(manager, event.queryStringParameters?.businessUnit);
     const unitName = businessUnit === "pho" ? "Xưởng Phở" : "Xưởng Mì";
-    const database = readDatabase();
+    const database = await readDatabase();
     recalculate(database);
     const customers = [...database.crm.customers]
       .filter((customer) => normalizeBusinessUnit(customer.businessUnit) === businessUnit)

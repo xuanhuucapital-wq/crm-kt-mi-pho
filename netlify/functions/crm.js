@@ -20,9 +20,9 @@ function deliveryCustomer(customer) {
 exports.handler = async (event) => {
   if (event.httpMethod !== "GET") return jsonResponse(405, { error: "Method not allowed" });
   try {
-    const sessionUser = requireAuth(event);
+    const sessionUser = await requireAuth(event);
     const businessUnit = requireBusinessUnit(sessionUser, event.queryStringParameters?.businessUnit);
-    const database = readDatabase();
+    const database = await readDatabase();
     recalculate(database);
     const customers = (database.crm.customers || []).filter((item) => item.businessUnit === businessUnit);
     const orders = (database.crm.orders || []).filter((item) => item.businessUnit === businessUnit);

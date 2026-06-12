@@ -2,7 +2,10 @@
   "scripts": {
     "dev": "netlify dev",
     "build": "echo \"Static app ready\"",
-    "test": "node scripts/run-crm-tests.js"
+    "test": "node scripts/run-crm-tests.js",
+    "db:setup:supabase": "node scripts/setup-supabase.js",
+    "db:import:supabase": "node scripts/import-crm-to-supabase.js",
+    "db:check:supabase": "node scripts/check-supabase-crm.js"
   },
   "dependencies": {
     "@netlify/functions": "^3.0.0",

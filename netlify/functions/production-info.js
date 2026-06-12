@@ -26,14 +26,14 @@ function matchCustomer(entry, customers) {
 
 exports.handler = async (event) => {
   try {
-    const sessionUser = requireAuth(event);
+    const sessionUser = await requireAuth(event);
     const payload = ["POST", "PUT"].includes(event.httpMethod) ? JSON.parse(event.body || "{}") : {};
     const businessUnit = requireBusinessUnit(
       sessionUser,
       payload.businessUnit || event.queryStringParameters?.businessUnit,
     );
     if (event.httpMethod === "GET" && sessionUser.role === "manager") {
-      const productionInfo = readDatabase().productionInfo || { title: "Thông tin khách hàng", entries: [] };
+      const productionInfo = (await readDatabase()).productionInfo || { title: "Thông tin khách hàng", entries: [] };
       return jsonResponse(200, {
         title: productionInfo.title,
         entries: (productionInfo.entries || []).filter((entry) => (

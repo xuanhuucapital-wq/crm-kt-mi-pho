@@ -8,9 +8,9 @@ const allowedBusinessUnits = ["mi", "pho"];
 
 exports.handler = async (event) => {
   try {
-    const manager = requireRole(event, "manager");
+    const manager = await requireRole(event, "manager");
     if (event.httpMethod === "GET") {
-      const users = (readDatabase().users || [])
+      const users = ((await readDatabase()).users || [])
         .map(publicUser)
         .sort((first, second) => String(second.createdAt).localeCompare(String(first.createdAt)));
       return jsonResponse(200, { users });

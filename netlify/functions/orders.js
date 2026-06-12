@@ -86,7 +86,7 @@ exports.handler = async (event) => {
     return jsonResponse(405, { error: "Method not allowed" });
   }
   try {
-    const sessionUser = requireAuth(event);
+    const sessionUser = await requireAuth(event);
     const payload = JSON.parse(event.body || "{}");
     const businessUnit = requireBusinessUnit(
       sessionUser,

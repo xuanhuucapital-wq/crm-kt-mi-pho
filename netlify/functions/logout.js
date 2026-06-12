@@ -5,7 +5,7 @@ const { jsonResponse } = require("./_sheets");
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
   try {
-    const sessionUser = requireAuth(event);
+    const sessionUser = await requireAuth(event);
     const payload = JSON.parse(event.body || "{}");
     const pageExit = payload.reason === "page-exit";
     await updateDatabase((database) => {

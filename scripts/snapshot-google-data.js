@@ -6,7 +6,7 @@ const crm = require("../netlify/functions/crm");
 const productionInfo = require("../netlify/functions/production-info");
 
 async function call(handler) {
-  const manager = (readDatabase().users || []).find((user) => user.role === "manager" && user.status === "active");
+  const manager = ((await readDatabase()).users || []).find((user) => user.role === "manager" && user.status === "active");
   if (!manager) throw new Error("Cần một tài khoản quản lý đang hoạt động để chạy snapshot.");
   const token = createSessionToken(manager);
   const response = await handler({

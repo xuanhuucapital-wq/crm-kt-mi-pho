@@ -1,9 +1,14 @@
 const fs = require("fs");
 const path = require("path");
+const { loadLocalEnv } = require("./_sheets");
+
+loadLocalEnv();
 
 const databasePath = process.env.CRM_DATABASE_PATH
   || path.join(process.cwd(), "data", "crm-database.json");
 const seedPath = path.join(process.cwd(), "data", "crm-snapshot.json");
+const SUPABASE_STATE_ID = "main";
+const MAX_UPDATE_RETRIES = 8;
 
 let writeQueue = Promise.resolve();
 
@@ -25,7 +30,16 @@ function normalizeText(value) {
     .trim();
 }
 
-function ensureDatabase() {
+function useSupabase() {
+  if (process.env.CRM_DATABASE_DRIVER === "file") return false;
+  if (process.env.CRM_DATABASE_PATH) return false;
+  return Boolean(
+    process.env.SUPABASE_URL
+    && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
+  );
+}
+
+function ensureFileDatabase() {
   if (fs.existsSync(databasePath)) return;
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
   const seed = JSON.parse(fs.readFileSync(seedPath, "utf8"));
@@ -36,9 +50,7 @@ function ensureDatabase() {
   fs.writeFileSync(databasePath, `${JSON.stringify(seed, null, 2)}\n`);
 }
 
-function readDatabase() {
-  ensureDatabase();
-  const database = JSON.parse(fs.readFileSync(databasePath, "utf8"));
+function normalizeDatabase(database) {
   database.users = database.users || [];
   database.auditLog = database.auditLog || [];
   database.payments = database.payments || [];
@@ -70,20 +82,102 @@ function readDatabase() {
   return database;
 }
 
-function writeDatabase(database) {
+function readFileDatabase() {
+  ensureFileDatabase();
+  return {
+    database: normalizeDatabase(JSON.parse(fs.readFileSync(databasePath, "utf8"))),
+    version: 0,
+  };
+}
+
+function writeFileDatabase(database) {
   database.updatedAt = new Date().toISOString();
   const temporaryPath = `${databasePath}.tmp`;
   fs.writeFileSync(temporaryPath, `${JSON.stringify(database, null, 2)}\n`);
   fs.renameSync(temporaryPath, databasePath);
 }
 
-function updateDatabase(mutator) {
-  const operation = writeQueue.then(() => {
-    const database = readDatabase();
-    const result = mutator(database);
-    recalculate(database);
-    writeDatabase(database);
-    return result;
+function supabaseHeaders(extra = {}) {
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return {
+    apikey: key,
+    authorization: `Bearer ${key}`,
+    "content-type": "application/json",
+    ...extra,
+  };
+}
+
+async function supabaseRequest(pathname, options = {}) {
+  const baseUrl = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    ...options,
+    headers: supabaseHeaders(options.headers),
+  });
+  const text = await response.text();
+  let body = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
+  if (!response.ok) {
+    const message = body?.message || body?.hint || body?.error || text || `HTTP ${response.status}`;
+    throw new Error(`Supabase database error: ${message}`);
+  }
+  return body;
+}
+
+async function readSupabaseDatabase() {
+  const rows = await supabaseRequest(
+    `/rest/v1/crm_state?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=data,version&limit=1`,
+    { method: "GET" },
+  );
+  if (!Array.isArray(rows) || !rows[0]?.data) {
+    throw new Error("Supabase chưa có dữ liệu CRM. Hãy chạy migration và import trước.");
+  }
+  return {
+    database: normalizeDatabase(rows[0].data),
+    version: Number(rows[0].version || 0),
+  };
+}
+
+async function replaceSupabaseDatabase(expectedVersion, database) {
+  const nextVersion = await supabaseRequest("/rest/v1/rpc/replace_crm_state", {
+    method: "POST",
+    body: JSON.stringify({
+      state_id: SUPABASE_STATE_ID,
+      expected_version: expectedVersion,
+      next_data: database,
+    }),
+  });
+  return nextVersion === null ? null : Number(nextVersion);
+}
+
+async function readDatabaseSnapshot() {
+  return useSupabase() ? readSupabaseDatabase() : readFileDatabase();
+}
+
+async function readDatabase() {
+  return (await readDatabaseSnapshot()).database;
+}
+
+async function updateDatabase(mutator) {
+  const operation = writeQueue.then(async () => {
+    for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt += 1) {
+      const { database, version } = await readDatabaseSnapshot();
+      const result = await mutator(database);
+      recalculate(database);
+      database.updatedAt = new Date().toISOString();
+      if (!useSupabase()) {
+        writeFileDatabase(database);
+        return result;
+      }
+      const nextVersion = await replaceSupabaseDatabase(version, database);
+      if (nextVersion !== null) return result;
+    }
+    throw new Error("Dữ liệu vừa được người khác cập nhật. Vui lòng thử lại.");
   });
   writeQueue = operation.catch(() => {});
   return operation;
@@ -122,8 +216,7 @@ function recalculate(database) {
     const businessUnit = normalizeBusinessUnit(customer.businessUnit);
     const customerOrders = orders.filter((order) => (
       normalizeBusinessUnit(order.businessUnit) === businessUnit
-      &&
-      normalizeText(order.customerName) === normalizeText(customer.TenKH)
+      && normalizeText(order.customerName) === normalizeText(customer.TenKH)
     ));
     customer.orderCount = customerOrders.length;
     customer.revenue = customerOrders.reduce((sum, order) => sum + order.subtotal, 0);
@@ -170,4 +263,5 @@ module.exports = {
   readDatabase,
   recalculate,
   updateDatabase,
+  useSupabase,
 };

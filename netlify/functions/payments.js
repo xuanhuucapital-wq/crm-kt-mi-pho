@@ -4,7 +4,7 @@ const { jsonResponse } = require("./_sheets");
 
 exports.handler = async (event) => {
   try {
-    const manager = requireRole(event, "manager");
+    const manager = await requireRole(event, "manager");
     const payload = event.httpMethod === "POST" ? JSON.parse(event.body || "{}") : {};
     const businessUnit = requireBusinessUnit(
       manager,
@@ -12,7 +12,7 @@ exports.handler = async (event) => {
     );
     if (event.httpMethod === "GET") {
       return jsonResponse(200, {
-        payments: (readDatabase().payments || []).filter((item) => (
+        payments: ((await readDatabase()).payments || []).filter((item) => (
           normalizeBusinessUnit(item.businessUnit) === businessUnit
         )),
       });

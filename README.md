@@ -10,7 +10,8 @@ thông tin sản xuất, Excel và nhật ký được lọc theo phân hệ đa
 
 ## Nguồn dữ liệu
 
-Nguồn dữ liệu chính là `data/crm-database.json`.
+Nguồn dữ liệu production là Supabase PostgreSQL. File `data/crm-database.json`
+chỉ còn dùng để phát triển local, chạy test và làm nguồn import ban đầu.
 
 - Tạo/sửa khách hàng ghi vào database CRM.
 - Tạo/sửa đơn hàng ghi vào database CRM.
@@ -49,14 +50,37 @@ Tạo biến môi trường:
 ```bash
 APP_AUTH_SECRET=<chuỗi ngẫu nhiên tối thiểu 64 ký tự>
 CRM_ADMIN_EMAIL=<email chủ doanh nghiệp>
+ALLOW_ADMIN_BOOTSTRAP=false
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=<sb_secret_backend-key>
 NODE_ENV=production
 ```
 
-Email `CRM_ADMIN_EMAIL` được phép đăng ký tài khoản quản lý đầu tiên. Không đặt mật khẩu, token hoặc secret trong source code.
+`SUPABASE_SECRET_KEY` chỉ được đặt trong secret của backend, tuyệt đối không
+đưa vào frontend hoặc GitHub.
+
+## Khởi tạo Supabase
+
+1. Chạy SQL trong `supabase/migrations/202606130001_create_crm_state.sql`.
+2. Khai báo `SUPABASE_URL` và `SUPABASE_SECRET_KEY`.
+3. Import dữ liệu hiện tại:
+
+```bash
+npm run db:import:supabase
+npm run db:check:supabase
+```
+
+Hoặc dùng Management API để chạy migration và import trong một lệnh. Đặt tạm
+`SUPABASE_ACCESS_TOKEN` và `SUPABASE_PROJECT_REF` trong `.env`, sau đó chạy:
+
+```bash
+npm run db:setup:supabase
+```
 
 ## Lưu ý database
 
-`data/crm-database.json` chỉ phù hợp chạy nội bộ trên một máy. Trước khi mở CRM cho nhiều người dùng qua internet, cần chuyển dữ liệu sang PostgreSQL hoặc một database managed có transaction, backup tự động, mã hóa ổ đĩa và kiểm soát truy cập. Không triển khai file JSON trên hệ thống serverless nhiều instance.
+Backend dùng version trên bản ghi Supabase để tránh hai request ghi đè dữ liệu của
+nhau. Khi có xung đột, request tự đọc lại và thử cập nhật tối đa 8 lần.
 
 Xem checklist tại [SECURITY.md](SECURITY.md).
 

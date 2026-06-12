@@ -31,12 +31,13 @@ function deliveryCustomer(customer) {
 
 exports.handler = async (event) => {
   try {
-    const sessionUser = requireAuth(event);
+    const sessionUser = await requireAuth(event);
     const payload = ["POST", "PUT"].includes(event.httpMethod) ? JSON.parse(event.body || "{}") : {};
     const requestedUnit = payload.businessUnit || event.queryStringParameters?.businessUnit;
     const businessUnit = requireBusinessUnit(sessionUser, requestedUnit);
     if (event.httpMethod === "GET") {
-      const customers = (readDatabase().crm.customers || []).filter((item) => (
+      const database = await readDatabase();
+      const customers = (database.crm.customers || []).filter((item) => (
         normalizeBusinessUnit(item.businessUnit) === businessUnit
       ));
       return jsonResponse(200, {
