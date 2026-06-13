@@ -5,7 +5,7 @@ const { jsonResponse, loadLocalEnv } = require("./_sheets");
 loadLocalEnv();
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
-const DEVELOPMENT_SECRET = crypto.randomBytes(32).toString("hex");
+let developmentSecret = "";
 
 function authError(message, statusCode = 401) {
   const error = new Error(message);
@@ -18,7 +18,8 @@ function tokenSecret() {
   if (process.env.NODE_ENV === "production") {
     throw authError("Máy chủ chưa cấu hình APP_AUTH_SECRET.", 500);
   }
-  return DEVELOPMENT_SECRET;
+  if (!developmentSecret) developmentSecret = crypto.randomBytes(32).toString("hex");
+  return developmentSecret;
 }
 
 function normalizeEmail(value) {
