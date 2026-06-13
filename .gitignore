@@ -6,6 +6,7 @@
 poised-resource-*.json
 node_modules/
 .netlify/
+.wrangler/
 dist/
 data/**
 !data/.gitkeep

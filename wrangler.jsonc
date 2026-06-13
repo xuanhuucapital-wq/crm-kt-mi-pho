@@ -3,10 +3,15 @@
   "name": "nhap-so-sach-mi",
   "main": "src/worker.js",
   "compatibility_date": "2026-06-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
   "assets": {
     "directory": "./public",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "NODE_ENV": "production",
+    "ALLOW_ADMIN_BOOTSTRAP": "false"
   },
   "observability": {
     "enabled": true

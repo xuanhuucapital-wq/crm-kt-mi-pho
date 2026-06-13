@@ -59,6 +59,49 @@ NODE_ENV=production
 `SUPABASE_SECRET_KEY` chỉ được đặt trong secret của backend, tuyệt đối không
 đưa vào frontend hoặc GitHub.
 
+## Triển khai Cloudflare
+
+Dự án dùng một Cloudflare Worker để phục vụ cả frontend trong `public/` và API
+trong `/api/*`. API gọi Supabase ở backend nên secret không xuất hiện trong
+trình duyệt.
+
+### Kết nối GitHub
+
+1. Vào Cloudflare Dashboard, chọn **Workers & Pages** rồi **Create application**.
+2. Chọn **Import a repository** và repo `crm-kt-mi-pho`.
+3. Chọn nhánh `main`.
+4. Build command: `npm run build`.
+5. Deploy command: `npm run deploy:cloudflare`.
+6. Thêm các biến/secret production:
+
+```text
+SUPABASE_URL
+SUPABASE_SECRET_KEY
+APP_AUTH_SECRET
+CRM_ADMIN_EMAIL
+```
+
+`APP_AUTH_SECRET` phải dùng đúng giá trị đang chạy hiện tại để các phiên đăng
+nhập không bị đổi khóa. Không thêm `SUPABASE_ACCESS_TOKEN` lên Cloudflare vì
+token đó chỉ phục vụ script thiết lập database.
+
+Sau khi deploy, Cloudflare cấp địa chỉ dạng:
+
+```text
+https://nhap-so-sach-mi.<tai-khoan>.workers.dev
+```
+
+Mỗi lần push nhánh `main`, Cloudflare sẽ tự build và triển khai lại.
+
+### Triển khai bằng terminal
+
+```bash
+npm run deploy:cloudflare
+```
+
+Trước lần đầu chạy, đăng nhập Wrangler và khai báo các secret bằng
+`npx wrangler secret put <TEN_SECRET>`.
+
 ## Khởi tạo Supabase
 
 1. Chạy SQL trong `supabase/migrations/202606130001_create_crm_state.sql`.

@@ -1,7 +1,9 @@
 {
   "scripts": {
     "dev": "netlify dev",
+    "dev:cloudflare": "wrangler dev",
     "build": "echo \"Static app ready\"",
+    "deploy:cloudflare": "wrangler deploy",
     "test": "node scripts/run-crm-tests.js",
     "db:setup:supabase": "node scripts/setup-supabase.js",
     "db:import:supabase": "node scripts/import-crm-to-supabase.js",
@@ -16,6 +18,7 @@
     "uuid": "$uuid"
   },
   "devDependencies": {
-    "netlify-cli": "^26.1.0"
+    "netlify-cli": "^26.1.0",
+    "wrangler": "^4.100.0"
   }
 }
