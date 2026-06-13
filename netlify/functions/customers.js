@@ -29,6 +29,22 @@ function deliveryCustomer(customer) {
   };
 }
 
+function sortCustomers(first, second) {
+  const firstName = String(first.TenKH || "").trim();
+  const secondName = String(second.TenKH || "").trim();
+  const startsWithLetter = (value) => /^[a-z]/.test(
+    value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase(),
+  );
+  if (startsWithLetter(firstName) !== startsWithLetter(secondName)) {
+    return startsWithLetter(firstName) ? -1 : 1;
+  }
+  return firstName.localeCompare(secondName, "vi", {
+    sensitivity: "base",
+    numeric: true,
+    ignorePunctuation: true,
+  });
+}
+
 exports.handler = async (event) => {
   try {
     const sessionUser = await requireAuth(event);
@@ -39,7 +55,7 @@ exports.handler = async (event) => {
       const database = await readDatabase();
       const customers = (database.crm.customers || []).filter((item) => (
         normalizeBusinessUnit(item.businessUnit) === businessUnit
-      ));
+      )).sort(sortCustomers);
       return jsonResponse(200, {
         customers: sessionUser.role === "delivery"
           ? customers.map(deliveryCustomer)

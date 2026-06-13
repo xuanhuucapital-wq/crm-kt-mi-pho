@@ -17,6 +17,22 @@ function deliveryCustomer(customer) {
   };
 }
 
+function sortCustomers(first, second) {
+  const firstName = String(first.TenKH || "").trim();
+  const secondName = String(second.TenKH || "").trim();
+  const startsWithLetter = (value) => /^[a-z]/.test(
+    value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase(),
+  );
+  if (startsWithLetter(firstName) !== startsWithLetter(secondName)) {
+    return startsWithLetter(firstName) ? -1 : 1;
+  }
+  return firstName.localeCompare(secondName, "vi", {
+    sensitivity: "base",
+    numeric: true,
+    ignorePunctuation: true,
+  });
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "GET") return jsonResponse(405, { error: "Method not allowed" });
   try {
@@ -24,7 +40,9 @@ exports.handler = async (event) => {
     const businessUnit = requireBusinessUnit(sessionUser, event.queryStringParameters?.businessUnit);
     const database = await readDatabase();
     recalculate(database);
-    const customers = (database.crm.customers || []).filter((item) => item.businessUnit === businessUnit);
+    const customers = (database.crm.customers || [])
+      .filter((item) => item.businessUnit === businessUnit)
+      .sort(sortCustomers);
     const orders = (database.crm.orders || []).filter((item) => item.businessUnit === businessUnit);
     if (sessionUser.role === "delivery") {
       return jsonResponse(200, {

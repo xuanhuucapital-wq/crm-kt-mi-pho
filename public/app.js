@@ -28,6 +28,11 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+const customerNameCollator = new Intl.Collator("vi", {
+  sensitivity: "base",
+  numeric: true,
+  ignorePunctuation: true,
+});
 const businessUnits = {
   mi: {
     name: "Xưởng Mì",
@@ -50,6 +55,17 @@ const businessUnits = {
 
 function currentUnit() {
   return businessUnits[state.businessUnit] || businessUnits.mi;
+}
+
+function compareCustomerNames(first, second) {
+  const firstName = String(first?.TenKH || first || "").trim();
+  const secondName = String(second?.TenKH || second || "").trim();
+  const firstStartsWithLetter = /^[a-z]/.test(normalizeVietnamese(firstName));
+  const secondStartsWithLetter = /^[a-z]/.test(normalizeVietnamese(secondName));
+  if (firstStartsWithLetter !== secondStartsWithLetter) {
+    return firstStartsWithLetter ? -1 : 1;
+  }
+  return customerNameCollator.compare(firstName, secondName);
 }
 
 function unitUrl(path) {
@@ -409,11 +425,7 @@ function renderCustomers(filter = "") {
   const query = filter.trim().toLowerCase();
   const rows = state.customers
     .filter((item) => `${item.MaKH} ${item.TenKH}`.toLowerCase().includes(query))
-    .sort((first, second) => String(first.TenKH || "").localeCompare(
-      String(second.TenKH || ""),
-      "vi",
-      { sensitivity: "base", numeric: true },
-    ));
+    .sort(compareCustomerNames);
   $("#customerTable").innerHTML = rows.map((item) => `
     <tr><td><div class="customer-cell"><span class="avatar">${escapeHtml(item.TenKH.slice(0, 1))}</span><span><strong>${escapeHtml(item.TenKH)}</strong><small>${escapeHtml(item.MaKH)}</small></span></div></td>
     <td>${number.format(item.orderCount || 0)}</td><td>${money.format(item.revenue || 0)}</td><td>${money.format(item.paid || 0)}</td><td><strong class="${item.debt > 0 ? "debt-value" : ""}">${money.format(item.debt || 0)}</strong></td><td>${formatDate(item.lastOrderDate)}</td><td>${escapeHtml(item.NhaXeMacDinh || "Chưa đặt")}</td>
@@ -645,7 +657,7 @@ function openProductionEdit(id) {
   if (!entry) return;
   const form = $("#productionEditForm");
   form.reset();
-  form.elements.customerCode.innerHTML = `<option value="">Chưa liên kết</option>${state.customers.map((customer) => `<option value="${escapeHtml(customer.MaKH)}">${escapeHtml(customer.MaKH)} · ${escapeHtml(customer.TenKH)}</option>`).join("")}`;
+  form.elements.customerCode.innerHTML = `<option value="">Chưa liên kết</option>${[...state.customers].sort(compareCustomerNames).map((customer) => `<option value="${escapeHtml(customer.MaKH)}">${escapeHtml(customer.MaKH)} · ${escapeHtml(customer.TenKH)}</option>`).join("")}`;
   ["id", "customer", "usualOrder", "production", "delivery", "additional", "invoice", "customerCode"].forEach((field) => {
     form.elements[field].value = entry[field] || "";
   });
@@ -660,7 +672,7 @@ function openProductionCreate() {
   const form = $("#productionEditForm");
   form.reset();
   form.elements.id.value = "";
-  form.elements.customerCode.innerHTML = `<option value="">Chưa liên kết</option>${state.customers.map((customer) => `<option value="${escapeHtml(customer.MaKH)}">${escapeHtml(customer.MaKH)} · ${escapeHtml(customer.TenKH)}</option>`).join("")}`;
+  form.elements.customerCode.innerHTML = `<option value="">Chưa liên kết</option>${[...state.customers].sort(compareCustomerNames).map((customer) => `<option value="${escapeHtml(customer.MaKH)}">${escapeHtml(customer.MaKH)} · ${escapeHtml(customer.TenKH)}</option>`).join("")}`;
   $("#productionEditEyebrow").textContent = "Thêm thông tin SX";
   $("#productionEditTitle").textContent = "Khách hàng mới";
   $("#saveProductionInfo").textContent = "Thêm thông tin";
@@ -1293,12 +1305,7 @@ function renderAll() {
   renderUsers();
   renderAuditAccounts();
   renderAuditLog();
-  const sortedCustomers = [...state.customers].sort((first, second) => (
-    String(first.TenKH || "").localeCompare(String(second.TenKH || ""), "vi", {
-      sensitivity: "base",
-      numeric: true,
-    })
-  ));
+  const sortedCustomers = [...state.customers].sort(compareCustomerNames);
   const options = sortedCustomers.map((item) => {
     const label = state.businessUnit === "pho"
       ? item.TenKH
@@ -1329,7 +1336,7 @@ async function loadCrm() {
   if (isManager && !paymentResponse.ok) throw new Error(paymentData.error || "Không tải được lịch sử thanh toán.");
   if (isManager && !userResponse.ok) throw new Error(userData.error || "Không tải được người dùng.");
   if (isManager && !auditResponse.ok) throw new Error(auditData.error || "Không tải được nhật ký hoạt động.");
-  state.customers = crmData.customers || [];
+  state.customers = (crmData.customers || []).sort(compareCustomerNames);
   state.orders = (crmData.orders || []).sort(newestOrderFirst);
   state.productionInfo = productionData.entries || [];
   state.productionInfoTitle = productionData.title || "";
