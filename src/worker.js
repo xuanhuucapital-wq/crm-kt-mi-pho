@@ -38,7 +38,7 @@ function applyEnvironment(env) {
   });
 }
 
-async function netlifyEvent(request, url) {
+async function netlifyEvent(request, url, context) {
   const headers = {};
   request.headers.forEach((value, key) => {
     headers[key.toLowerCase()] = value;
@@ -52,6 +52,7 @@ async function netlifyEvent(request, url) {
     queryStringParameters: Object.fromEntries(url.searchParams.entries()),
     rawQuery: url.searchParams.toString(),
     rawUrl: request.url,
+    waitUntil: (promise) => context.waitUntil(promise),
   };
 }
 
@@ -68,7 +69,7 @@ function workerResponse(result) {
   });
 }
 
-async function handleApi(request, env, url) {
+async function handleApi(request, env, url, context) {
   const handler = apiRoutes[url.pathname];
   if (!handler) {
     return workerResponse({
@@ -78,7 +79,7 @@ async function handleApi(request, env, url) {
     });
   }
   applyEnvironment(env);
-  return workerResponse(await handler(await netlifyEvent(request, url)));
+  return workerResponse(await handler(await netlifyEvent(request, url, context)));
 }
 
 async function handleAsset(request, env) {
@@ -93,11 +94,11 @@ async function handleAsset(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, context) {
     const url = new URL(request.url);
     try {
       if (url.pathname.startsWith("/api/")) {
-        return await handleApi(request, env, url);
+        return await handleApi(request, env, url, context);
       }
       return await handleAsset(request, env);
     } catch (error) {

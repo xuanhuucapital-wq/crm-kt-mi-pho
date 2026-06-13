@@ -4,7 +4,12 @@ const {
   publicUser,
   verifyPassword,
 } = require("./_auth");
-const { appendAudit, normalizeText, updateDatabase } = require("./_database");
+const {
+  appendAudit,
+  normalizeText,
+  readDatabase,
+  updateDatabase,
+} = require("./_database");
 const { jsonResponse } = require("./_sheets");
 
 const attempts = new Map();
@@ -43,38 +48,47 @@ exports.handler = async (event) => {
     const key = clientKey(event, email);
     checkRateLimit(key);
 
-    const result = await updateDatabase((database) => {
-      const user = (database.users || []).find((item) => normalizeText(item.email) === normalizeText(email));
-      if (!user || !verifyPassword(password, user.passwordHash)) {
-        const error = new Error("Email hoặc mật khẩu không đúng.");
-        error.statusCode = 401;
-        throw error;
-      }
-      if (user.status === "pending") {
-        const error = new Error("Tài khoản đang chờ quản lý phê duyệt.");
-        error.statusCode = 403;
-        throw error;
-      }
-      if (user.status !== "active") {
-        const error = new Error("Tài khoản đã bị khóa.");
-        error.statusCode = 403;
-        throw error;
-      }
-      user.lastLoginAt = new Date().toISOString();
-      appendAudit(database, {
+    const database = await readDatabase();
+    const user = (database.users || []).find((item) => normalizeText(item.email) === normalizeText(email));
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      const error = new Error("Email hoặc mật khẩu không đúng.");
+      error.statusCode = 401;
+      throw error;
+    }
+    if (user.status === "pending") {
+      const error = new Error("Tài khoản đang chờ quản lý phê duyệt.");
+      error.statusCode = 403;
+      throw error;
+    }
+    if (user.status !== "active") {
+      const error = new Error("Tài khoản đã bị khóa.");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const result = { token: createSessionToken(user), user: publicUser(user) };
+    const recordLogin = () => updateDatabase((currentDatabase) => {
+      const currentUser = (currentDatabase.users || []).find((item) => Number(item.id) === Number(user.id));
+      if (!currentUser) return;
+      currentUser.lastLoginAt = new Date().toISOString();
+      appendAudit(currentDatabase, {
         action: "user-login",
-        actorUserId: user.id,
-        actorEmail: user.email,
-        actorName: user.displayName,
-        summary: `${user.displayName} đăng nhập hệ thống.`,
+        actorUserId: currentUser.id,
+        actorEmail: currentUser.email,
+        actorName: currentUser.displayName,
+        summary: `${currentUser.displayName} đăng nhập hệ thống.`,
         details: {
-          role: user.role,
+          role: currentUser.role,
           ip: clientKey(event, email).split("|")[0],
           userAgent: String(event.headers?.["user-agent"] || event.headers?.["User-Agent"] || ""),
         },
       });
-      return { token: createSessionToken(user), user: publicUser(user) };
     });
+    if (typeof event.waitUntil === "function") {
+      event.waitUntil(recordLogin().catch((error) => console.error("Không ghi được nhật ký đăng nhập:", error)));
+    } else {
+      await recordLogin();
+    }
     clearRateLimit(key);
     return jsonResponse(200, result);
   } catch (error) {
