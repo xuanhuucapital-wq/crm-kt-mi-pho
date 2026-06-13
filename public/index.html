@@ -53,6 +53,7 @@
           <button class="nav-item" data-view="ledger"><span>▤</span>Sổ dữ liệu</button>
           <button class="nav-item" data-view="customers"><span>♙</span>Khách hàng</button>
           <button class="nav-item" data-view="production"><span>⚙</span>Thông tin SX</button>
+          <button class="nav-item" data-view="productionStats"><span>▥</span>Sản lượng</button>
           <button class="nav-item" data-view="debts"><span>₫</span>Công nợ</button>
           <button class="nav-item" data-view="reports"><span>⌁</span>Báo cáo</button>
           <button class="nav-item" data-view="insights"><span>✦</span>Gợi ý AI</button>
@@ -217,6 +218,22 @@
           </div>
           <section class="surface">
             <div class="table-wrap"><table class="production-table"><thead><tr><th>Khách hàng</th><th>Liên kết CRM</th><th>Số lượng thường lấy</th><th>Hướng dẫn sản xuất</th><th>Nơi gửi</th><th></th></tr></thead><tbody id="productionTable"></tbody></table></div>
+          </section>
+        </section>
+
+        <section id="productionStatsView" class="view">
+          <div class="page-head">
+            <div><p class="eyebrow">Điều hành sản xuất</p><h1>Sản lượng theo ngày</h1><p id="productionStatsDescription">Tổng hợp số kg bán ra từ các đơn hàng theo ngày giao.</p></div>
+          </div>
+          <section class="surface production-stats-filters">
+            <label>Từ ngày<input id="productionStatsFrom" type="date" /></label>
+            <label>Đến ngày<input id="productionStatsTo" type="date" /></label>
+            <button id="clearProductionStatsFilters" type="button">30 ngày gần nhất</button>
+          </section>
+          <div id="productionStatsMetrics" class="production-stats-metrics"></div>
+          <section class="surface">
+            <div class="section-head"><div><h2 id="productionStatsTableTitle">Chi tiết sản lượng</h2><p id="productionStatsPeriod"></p></div></div>
+            <div class="table-wrap"><table class="production-stats-table"><thead><tr><th>Thứ</th><th>Ngày</th><th id="productionStatsProductHeader1">Mì</th><th id="productionStatsProductHeader2">Da cảo</th><th id="productionStatsProductHeader3">Da hoành</th><th>Tổng kg</th><th>Số đơn</th><th>Số khách</th></tr></thead><tbody id="productionStatsTable"></tbody></table></div>
           </section>
         </section>
 

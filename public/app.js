@@ -372,6 +372,7 @@ function renderAuth() {
 function switchView(name) {
   if (state.user?.role === "delivery" && name !== "orders") name = "orders";
   if (name === "reports") resetReportToLast30Days();
+  if (name === "productionStats") resetProductionStatsToLast30Days();
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === `${name}View`));
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   $(".sidebar").classList.remove("open");
@@ -1107,6 +1108,117 @@ function dateDaysBefore(isoDate, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function productionStatsProducts() {
+  return currentUnit().products.map((product) => ({
+    ...product,
+    statsName: product.key === "phoCuon" ? "Phở lá" : product.name,
+  }));
+}
+
+function productionWeekday(dateValue) {
+  const [year, month, day] = String(dateValue || "").split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return weekday === 0 ? "CN" : `T${weekday + 1}`;
+}
+
+function resetProductionStatsToLast30Days() {
+  const to = todayInVietnam();
+  $("#productionStatsFrom").value = dateDaysBefore(to, 29);
+  $("#productionStatsTo").value = to;
+  renderProductionStats();
+}
+
+function renderProductionStats() {
+  const products = productionStatsProducts();
+  const from = $("#productionStatsFrom").value;
+  const to = $("#productionStatsTo").value;
+  const grouped = new Map();
+
+  state.orders.forEach((order) => {
+    if (!order.date || (from && order.date < from) || (to && order.date > to)) return;
+    const quantities = Object.fromEntries(products.map((product) => [
+      product.quantity,
+      Number(order[product.quantity] || 0),
+    ]));
+    const orderKg = products.reduce((sum, product) => sum + quantities[product.quantity], 0);
+    if (orderKg <= 0) return;
+    const current = grouped.get(order.date) || {
+      date: order.date,
+      orders: 0,
+      customers: new Set(),
+      totalKg: 0,
+      quantities: Object.fromEntries(products.map((product) => [product.quantity, 0])),
+    };
+    current.orders += 1;
+    current.customers.add(normalizeVietnamese(order.customerName));
+    current.totalKg += orderKg;
+    products.forEach((product) => {
+      current.quantities[product.quantity] += quantities[product.quantity];
+    });
+    grouped.set(order.date, current);
+  });
+
+  const rows = [...grouped.values()].sort((first, second) => second.date.localeCompare(first.date));
+  const totals = rows.reduce((result, row) => {
+    result.totalKg += row.totalKg;
+    result.orders += row.orders;
+    products.forEach((product) => {
+      result.quantities[product.quantity] += row.quantities[product.quantity];
+    });
+    return result;
+  }, {
+    totalKg: 0,
+    orders: 0,
+    quantities: Object.fromEntries(products.map((product) => [product.quantity, 0])),
+  });
+  const averagePerDay = rows.length ? totals.totalKg / rows.length : 0;
+
+  $("#productionStatsDescription").textContent = state.businessUnit === "pho"
+    ? "Tổng hợp phở sợi và phở lá bán ra theo ngày giao; số cây phở sợi đã quy đổi sang kg."
+    : "Tổng hợp mì, da cảo và da hoành bán ra theo ngày giao.";
+  $("#productionStatsTableTitle").textContent = `Chi tiết sản lượng ${currentUnit().name}`;
+  $("#productionStatsPeriod").textContent = from && to
+    ? `${formatDate(from)} đến ${formatDate(to)}`
+    : "Toàn bộ thời gian";
+
+  const headers = ["#productionStatsProductHeader1", "#productionStatsProductHeader2", "#productionStatsProductHeader3"];
+  headers.forEach((selector, index) => {
+    const header = $(selector);
+    const product = products[index];
+    header.classList.toggle("hidden", !product);
+    if (product) header.textContent = `${product.statsName} (kg)`;
+  });
+
+  $("#productionStatsMetrics").innerHTML = [
+    ["Tổng sản lượng", `${number.format(totals.totalKg)} kg`, `${number.format(rows.length)} ngày có sản xuất`],
+    ...products.map((product) => [
+      product.statsName,
+      `${number.format(totals.quantities[product.quantity])} kg`,
+      "Theo đơn hàng đã ghi nhận",
+    ]),
+    ["Trung bình/ngày", `${number.format(averagePerDay)} kg`, "Tính trên ngày có sản lượng"],
+    ["Số đơn", number.format(totals.orders), "Không tính đơn khách nghỉ"],
+  ].map(([label, value, note]) => `<div><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("");
+
+  $("#productionStatsTable").innerHTML = rows.map((row) => {
+    const productCells = Array.from({ length: 3 }, (_, index) => {
+      const product = products[index];
+      return product
+        ? `<td>${number.format(row.quantities[product.quantity])}</td>`
+        : '<td class="hidden"></td>';
+    }).join("");
+    return `<tr>
+      <td>${productionWeekday(row.date)}</td>
+      <td><strong>${formatDate(row.date)}</strong></td>
+      ${productCells}
+      <td><strong class="daily-total">${number.format(row.totalKg)}</strong></td>
+      <td>${number.format(row.orders)}</td>
+      <td>${number.format(row.customers.size)}</td>
+    </tr>`;
+  }).join("") || '<tr><td colspan="8" class="empty-row">Không có sản lượng trong khoảng ngày đã chọn.</td></tr>';
+}
+
 function resetReportToLast30Days() {
   const to = todayInVietnam();
   $("#reportCustomer").value = "";
@@ -1346,6 +1458,7 @@ function renderAll() {
   renderLedger();
   renderReportCustomers();
   renderReports();
+  renderProductionStats();
   renderUsers();
   renderAuditAccounts();
   renderAuditLog();
@@ -2277,6 +2390,10 @@ $$("#businessUnitSwitcher button").forEach((button) => {
 ["#reportCustomer", "#reportFrom", "#reportTo"].forEach((selector) => {
   $(selector).addEventListener("input", renderReports);
 });
+["#productionStatsFrom", "#productionStatsTo"].forEach((selector) => {
+  $(selector).addEventListener("input", renderProductionStats);
+});
+$("#clearProductionStatsFilters").addEventListener("click", resetProductionStatsToLast30Days);
 $$('[name="reportPeriod"]').forEach((input) => input.addEventListener("change", renderReports));
 $("#clearReportFilters").addEventListener("click", () => {
   resetReportToLast30Days();
