@@ -22,6 +22,10 @@ const state = {
   auditLog: [],
   explicitLogout: false,
   businessUnit: localStorage.getItem("nhapLieuBusinessUnit") || "mi",
+  customerSortDirections: {
+    mi: localStorage.getItem("nhapLieuCustomerSortDirection:mi") === "desc" ? "desc" : "asc",
+    pho: localStorage.getItem("nhapLieuCustomerSortDirection:pho") === "desc" ? "desc" : "asc",
+  },
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -57,7 +61,11 @@ function currentUnit() {
   return businessUnits[state.businessUnit] || businessUnits.mi;
 }
 
-function compareCustomerNames(first, second) {
+function currentCustomerSortDirection() {
+  return state.customerSortDirections[state.businessUnit] === "desc" ? "desc" : "asc";
+}
+
+function compareCustomerNames(first, second, direction = "asc") {
   const firstName = String(first?.TenKH || first || "").trim();
   const secondName = String(second?.TenKH || second || "").trim();
   const firstStartsWithLetter = /^[a-z]/.test(normalizeVietnamese(firstName));
@@ -65,7 +73,42 @@ function compareCustomerNames(first, second) {
   if (firstStartsWithLetter !== secondStartsWithLetter) {
     return firstStartsWithLetter ? -1 : 1;
   }
-  return customerNameCollator.compare(firstName, secondName);
+  const comparison = customerNameCollator.compare(firstName, secondName);
+  return direction === "desc" ? -comparison : comparison;
+}
+
+function sortedCustomers() {
+  return [...state.customers].sort((first, second) => compareCustomerNames(first, second, currentCustomerSortDirection()));
+}
+
+function syncCustomerSortControls() {
+  const direction = currentCustomerSortDirection();
+  ["#orderCustomerSortDirection", "#customerSortDirection"].forEach((selector) => {
+    const control = $(selector);
+    if (control) control.value = direction;
+  });
+}
+
+function renderOrderCustomerOptions() {
+  const customerSelect = $("#customerCode");
+  const current = customerSelect.value;
+  const options = sortedCustomers().map((item) => {
+    const label = state.businessUnit === "pho"
+      ? item.TenKH
+      : `${item.MaKH} · ${item.TenKH}`;
+    return `<option value="${escapeHtml(item.MaKH)}">${escapeHtml(label)}</option>`;
+  }).join("");
+  customerSelect.innerHTML = `<option value="">Chọn khách hàng</option>${options}`;
+  customerSelect.value = state.customers.some((item) => item.MaKH === current) ? current : "";
+}
+
+function setCustomerSortDirection(direction) {
+  const normalizedDirection = direction === "desc" ? "desc" : "asc";
+  state.customerSortDirections[state.businessUnit] = normalizedDirection;
+  localStorage.setItem(`nhapLieuCustomerSortDirection:${state.businessUnit}`, normalizedDirection);
+  syncCustomerSortControls();
+  renderOrderCustomerOptions();
+  renderCustomers($("#customerSearch").value);
 }
 
 function unitUrl(path) {
@@ -425,7 +468,7 @@ function renderCustomers(filter = "") {
   const query = filter.trim().toLowerCase();
   const rows = state.customers
     .filter((item) => `${item.MaKH} ${item.TenKH}`.toLowerCase().includes(query))
-    .sort(compareCustomerNames);
+    .sort((first, second) => compareCustomerNames(first, second, currentCustomerSortDirection()));
   $("#customerTable").innerHTML = rows.map((item) => `
     <tr><td><div class="customer-cell"><span class="avatar">${escapeHtml(item.TenKH.slice(0, 1))}</span><span><strong>${escapeHtml(item.TenKH)}</strong><small>${escapeHtml(item.MaKH)}</small></span></div></td>
     <td>${number.format(item.orderCount || 0)}</td><td>${money.format(item.revenue || 0)}</td><td>${money.format(item.paid || 0)}</td><td><strong class="${item.debt > 0 ? "debt-value" : ""}">${money.format(item.debt || 0)}</strong></td><td>${formatDate(item.lastOrderDate)}</td><td>${escapeHtml(item.NhaXeMacDinh || "Chưa đặt")}</td>
@@ -1293,6 +1336,7 @@ function renderReportCustomers() {
 
 function renderAll() {
   applyBusinessUnitUi();
+  syncCustomerSortControls();
   renderDashboard();
   renderCustomers();
   renderProductionInfo();
@@ -1305,14 +1349,7 @@ function renderAll() {
   renderUsers();
   renderAuditAccounts();
   renderAuditLog();
-  const sortedCustomers = [...state.customers].sort(compareCustomerNames);
-  const options = sortedCustomers.map((item) => {
-    const label = state.businessUnit === "pho"
-      ? item.TenKH
-      : `${item.MaKH} · ${item.TenKH}`;
-    return `<option value="${escapeHtml(item.MaKH)}">${escapeHtml(label)}</option>`;
-  }).join("");
-  $("#customerCode").innerHTML = `<option value="">Chọn khách hàng</option>${options}`;
+  renderOrderCustomerOptions();
 }
 
 async function loadCrm() {
@@ -1336,7 +1373,7 @@ async function loadCrm() {
   if (isManager && !paymentResponse.ok) throw new Error(paymentData.error || "Không tải được lịch sử thanh toán.");
   if (isManager && !userResponse.ok) throw new Error(userData.error || "Không tải được người dùng.");
   if (isManager && !auditResponse.ok) throw new Error(auditData.error || "Không tải được nhật ký hoạt động.");
-  state.customers = (crmData.customers || []).sort(compareCustomerNames);
+  state.customers = crmData.customers || [];
   state.orders = (crmData.orders || []).sort(newestOrderFirst);
   state.productionInfo = productionData.entries || [];
   state.productionInfoTitle = productionData.title || "";
@@ -2161,6 +2198,8 @@ document.addEventListener("click", (event) => {
 
 $$(".jump-order").forEach((button) => button.addEventListener("click", () => switchView("orders")));
 $("#customerSearch").addEventListener("input", (event) => renderCustomers(event.target.value));
+$("#customerSortDirection").addEventListener("change", (event) => setCustomerSortDirection(event.target.value));
+$("#orderCustomerSortDirection").addEventListener("change", (event) => setCustomerSortDirection(event.target.value));
 $("#productionSearch").addEventListener("input", renderProductionInfo);
 $("#productionFilter").addEventListener("change", renderProductionInfo);
 $("#debtSearch").addEventListener("input", (event) => renderDebts(event.target.value));

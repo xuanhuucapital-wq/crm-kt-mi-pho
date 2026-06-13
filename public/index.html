@@ -98,6 +98,7 @@
               <div class="form-grid">
                 <div class="wide customer-picker">
                   <label>Khách hàng<select id="customerCode" name="customerCode" required><option value="">Chọn khách hàng</option></select></label>
+                  <label class="customer-sort-field">Sắp xếp<select id="orderCustomerSortDirection" aria-label="Sắp xếp khách hàng khi tạo đơn"><option value="asc">Tên A–Z</option><option value="desc">Tên Z–A</option></select></label>
                   <button id="addCustomerButton" class="secondary-button" type="button">＋ Thêm khách</button>
                 </div>
                 <label>Ngày giao<input id="orderDate" name="orderDate" type="date" required /></label>
@@ -193,7 +194,7 @@
         </section>
 
         <section id="customersView" class="view">
-          <div class="page-head"><div><p class="eyebrow">Quan hệ khách hàng</p><h1>Thống kê từng khách</h1><p>Theo dõi doanh số, tiền đã thu và công nợ của từng khách hàng.</p></div><input id="customerSearch" class="search" placeholder="Tìm mã hoặc tên khách..." /></div>
+          <div class="page-head"><div><p class="eyebrow">Quan hệ khách hàng</p><h1>Thống kê từng khách</h1><p>Theo dõi doanh số, tiền đã thu và công nợ của từng khách hàng.</p></div><div class="page-actions"><input id="customerSearch" class="search" placeholder="Tìm mã hoặc tên khách..." /><select id="customerSortDirection" class="customer-sort-select" aria-label="Sắp xếp danh sách khách hàng"><option value="asc">Tên A–Z</option><option value="desc">Tên Z–A</option></select></div></div>
           <div class="surface"><div class="table-wrap"><table><thead><tr><th>Khách hàng</th><th>Số đơn</th><th>Tiền hàng</th><th>Đã thu</th><th>Còn nợ</th><th>Đơn gần nhất</th><th>Nhà xe</th><th>Thao tác</th></tr></thead><tbody id="customerTable"></tbody></table></div></div>
         </section>
 
