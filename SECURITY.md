@@ -11,7 +11,7 @@
 - Database, snapshot, file Excel và `.env` bị loại khỏi Git.
 - Toàn bộ thư mục `data/` và file backup `.bak` bị loại khỏi Git.
 - Ghi audit log cho tạo/copy đơn và thay đổi quyền user.
-- API Cloudflare legacy trả `410 Gone`; backend nghiệp vụ duy nhất là Netlify Functions.
+- Cloudflare Worker là backend nghiệp vụ và phục vụ toàn bộ route `/api/*`.
 - Đơn nợ mới không nhận trường `paid` từ frontend; thu tiền chỉ đi qua API thanh toán.
 - Local server chỉ bind `127.0.0.1`; mở ra LAN phải bật rõ `LOCAL_ALLOW_NETWORK=true`.
 
@@ -19,7 +19,7 @@
 
 1. Chuyển `crm-database.json` sang PostgreSQL managed.
 2. Bật HTTPS và đặt `APP_AUTH_SECRET` ngẫu nhiên tối thiểu 64 ký tự.
-3. Lưu secrets trong Netlify/Cloudflare secret manager, không lưu trong Git.
+3. Lưu secrets trong Cloudflare secret manager, không lưu trong Git.
 4. Thiết lập backup tự động, kiểm thử phục hồi và retention.
 5. Thêm rate limit dùng Redis/KV ở gateway; rate limit trong RAM hiện chỉ phù hợp một instance.
 6. Chuyển bearer token phía trình duyệt sang cookie `HttpOnly; Secure; SameSite=Strict`.

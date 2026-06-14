@@ -64,7 +64,7 @@ function requiredEnv(name) {
   return value;
 }
 
-// Tạo phản hồi JSON chuẩn cho Netlify Function.
+// Tạo phản hồi JSON chuẩn cho các API handler.
 function jsonResponse(statusCode, body) {
   return {
     // HTTP status, ví dụ 200 thành công, 400 lỗi nhập liệu.

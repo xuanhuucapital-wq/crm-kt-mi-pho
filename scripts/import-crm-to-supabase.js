@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
-const { loadLocalEnv } = require("../netlify/functions/_sheets");
-const { recalculate } = require("../netlify/functions/_database");
+const { loadLocalEnv } = require("../backend/_sheets");
+const { recalculate } = require("../backend/_database");
 
 loadLocalEnv();
 

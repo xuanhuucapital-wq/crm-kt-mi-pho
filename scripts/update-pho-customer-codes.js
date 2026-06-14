@@ -2,7 +2,7 @@ const {
   appendAudit,
   normalizeText,
   updateDatabase,
-} = require("../netlify/functions/_database");
+} = require("../backend/_database");
 
 const codeByName = {
   "Đan Phượng Q11": "danphuong-q11",

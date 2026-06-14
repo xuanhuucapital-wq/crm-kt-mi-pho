@@ -1,7 +1,6 @@
 {
   "scripts": {
-    "dev": "netlify dev",
-    "dev:cloudflare": "wrangler dev",
+    "dev": "wrangler dev",
     "build": "echo \"Static app ready\"",
     "deploy:cloudflare": "wrangler deploy",
     "test": "node scripts/run-crm-tests.js",
@@ -10,7 +9,6 @@
     "db:check:supabase": "node scripts/check-supabase-crm.js"
   },
   "dependencies": {
-    "@netlify/functions": "^3.0.0",
     "exceljs": "^4.4.0",
     "uuid": "11.1.1"
   },
@@ -18,7 +16,6 @@
     "uuid": "$uuid"
   },
   "devDependencies": {
-    "netlify-cli": "^26.1.0",
     "wrangler": "^4.100.0"
   }
 }

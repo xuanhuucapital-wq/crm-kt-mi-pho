@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { recalculate } = require("../netlify/functions/_database");
+const { recalculate } = require("../backend/_database");
 
 const customerName = process.argv[2];
 const throughDate = process.argv[3];

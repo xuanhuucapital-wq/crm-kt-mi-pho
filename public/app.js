@@ -120,6 +120,17 @@ function authHeaders(extra = {}) {
   return { ...extra, authorization: `Bearer ${state.token}` };
 }
 
+async function readApiResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const status = response.status ? ` (HTTP ${response.status})` : "";
+    throw new Error(`Máy chủ tạm thời trả phản hồi không hợp lệ${status}. Vui lòng thử lại.`);
+  }
+}
+
 function parseNumber(value) {
   const raw = String(value || "").trim();
   const normalized = /^\d{1,3}(?:\.\d{3})+$/.test(raw)
@@ -864,7 +875,7 @@ async function deleteLedgerOrder(button) {
         businessUnit: state.businessUnit,
       }),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không xóa được đơn hàng.");
     await loadCrm();
     const paymentText = data.reversedPayment
@@ -1478,7 +1489,7 @@ async function loadCrm() {
     );
   }
   const responses = await Promise.all(requests);
-  const data = await Promise.all(responses.map((response) => response.json()));
+  const data = await Promise.all(responses.map(readApiResponse));
   const [crmResponse, productionResponse, paymentResponse, userResponse, auditResponse] = responses;
   const [crmData, productionData = {}, paymentData = {}, userData = {}, auditData = {}] = data;
   if (!crmResponse.ok) throw new Error(crmData.error || "Không tải được database CRM.");
@@ -1884,7 +1895,7 @@ async function saveChatOrder(button) {
       headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ ...state.pendingChatOrder.payload, businessUnit: state.businessUnit }),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không ghi được đơn hàng.");
     addChatMessage(`<p>Đã ghi đơn cho <strong>${escapeHtml(data.customerName)}</strong>.</p><small>Tiền hàng và công nợ đã cập nhật trong database CRM.</small>`, "success");
     state.pendingChatOrder = null;
@@ -1915,7 +1926,7 @@ $("#loginForm").addEventListener("submit", async (event) => {
   button.disabled = true;
   try {
     const response = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Đăng nhập thất bại.");
     state.token = data.token;
     state.user = data.user;
@@ -1953,7 +1964,7 @@ $("#registerForm").addEventListener("submit", async (event) => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(Object.fromEntries(new FormData(form))),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không đăng ký được tài khoản.");
     notice($("#registerResult"), data.message);
     form.reset();
@@ -1996,7 +2007,7 @@ $("#orderForm").addEventListener("submit", async (event) => {
     payload.paymentMethod = paymentMethod;
     payload.businessUnit = state.businessUnit;
     const response = await fetch("/api/orders", { method: "POST", headers: authHeaders({ "content-type": "application/json" }), body: JSON.stringify(payload) });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không lưu được đơn hàng.");
     notice($("#result"), `Đã lưu đơn ${paymentLabels[paymentMethod]} cho ${data.customerName}, mã giao dịch #${data.rowNumber}.`);
     form.reset();
@@ -2019,7 +2030,7 @@ $("#customerEditForm").addEventListener("submit", async (event) => {
   const payload = normalizeCustomerPrices(Object.fromEntries(new FormData(event.currentTarget)));
   try {
     const response = await fetch(unitUrl("/api/customers"), { method: "PUT", headers: authHeaders({ "content-type": "application/json" }), body: JSON.stringify(payload) });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không cập nhật được bảng giá.");
     const syncText = data.syncedOrders || data.syncedProduction
       ? ` Đã cập nhật ${data.syncedOrders || 0} đơn hàng và ${data.syncedProduction || 0} hồ sơ sản xuất trong database.`
@@ -2054,7 +2065,7 @@ $("#customerCreateForm").addEventListener("submit", async (event) => {
       headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không thêm được khách hàng.");
     const linkedText = data.linkedProduction
       ? ` Đã liên kết thông tin SX "${data.linkedProduction.customer}".`
@@ -2098,7 +2109,7 @@ $("#productionEditForm").addEventListener("submit", async (event) => {
       headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || `Không ${isCreating ? "thêm" : "sửa"} được thông tin sản xuất.`);
     notice($("#productionEditResult"), isCreating ? "Đã thêm thông tin sản xuất." : "Đã cập nhật thông tin sản xuất.");
     await loadCrm();
@@ -2129,7 +2140,7 @@ $("#syncProductionCustomers").addEventListener("click", async () => {
       headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ businessUnit: state.businessUnit }),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không khớp được khách hàng CRM.");
     await loadCrm();
     button.textContent = `Đã khớp thêm ${data.matched} khách`;
@@ -2167,7 +2178,7 @@ $("#orderEditForm").addEventListener("submit", async (event) => {
       headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || (copying ? "Không tạo được đơn bản sao." : "Không sửa được đơn hàng."));
     notice(
       $("#orderEditResult"),
@@ -2205,7 +2216,7 @@ $("#paymentForm").addEventListener("submit", async (event) => {
         businessUnit: state.businessUnit,
       }),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không cập nhật được thanh toán.");
     notice($("#paymentResult"), `Đã ghi nhận thanh toán ${money.format(amount)}.`);
     await loadCrm();
@@ -2297,7 +2308,7 @@ document.addEventListener("click", (event) => {
         businessUnits: [...row.querySelectorAll(".user-unit-input:checked")].map((input) => input.value),
       }),
     }).then(async (response) => {
-      const data = await response.json();
+      const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || "Không cập nhật được quyền.");
       await loadCrm();
       notice($("#userManagementResult"), `Đã cập nhật quyền cho ${data.user.email}.`);
@@ -2326,7 +2337,7 @@ $("#refreshAudit").addEventListener("click", async () => {
   button.textContent = "Đang tải...";
   try {
     const response = await fetch(unitUrl("/api/audit-log?limit=500"), { headers: authHeaders() });
-    const data = await response.json();
+    const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không tải được nhật ký hoạt động.");
     state.auditLog = data.entries || [];
     renderAuditAccounts();
@@ -2348,7 +2359,7 @@ $("#exportDebtsExcel").addEventListener("click", async () => {
   try {
     const response = await fetch(unitUrl("/api/export-debts"), { headers: authHeaders() });
     if (!response.ok) {
-      const data = await response.json();
+      const data = await readApiResponse(response);
       throw new Error(data.error || "Không xuất được Excel công nợ.");
     }
     const blob = await response.blob();

@@ -1,16 +1,16 @@
 process.env.CRM_DATABASE_PATH = process.argv[2];
 
-const { createSessionToken, hashPassword } = require("../netlify/functions/_auth");
-const { readDatabase, updateDatabase } = require("../netlify/functions/_database");
-const auditLog = require("../netlify/functions/audit-log");
-const crm = require("../netlify/functions/crm");
-const customers = require("../netlify/functions/customers");
-const login = require("../netlify/functions/login");
-const logout = require("../netlify/functions/logout");
-const orders = require("../netlify/functions/orders");
-const payments = require("../netlify/functions/payments");
-const productionInfo = require("../netlify/functions/production-info");
-const exportDebts = require("../netlify/functions/export-debts");
+const { createSessionToken, hashPassword } = require("../backend/_auth");
+const { readDatabase, updateDatabase } = require("../backend/_database");
+const auditLog = require("../backend/audit-log");
+const crm = require("../backend/crm");
+const customers = require("../backend/customers");
+const login = require("../backend/login");
+const logout = require("../backend/logout");
+const orders = require("../backend/orders");
+const payments = require("../backend/payments");
+const productionInfo = require("../backend/production-info");
+const exportDebts = require("../backend/export-debts");
 const ExcelJS = require("exceljs");
 
 let token = "";

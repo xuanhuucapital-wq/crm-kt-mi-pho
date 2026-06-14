@@ -12,7 +12,7 @@ fs.writeFileSync(databasePath, `${JSON.stringify({
   auditLog: [],
 }, null, 2)}\n`);
 
-const register = require("../netlify/functions/register");
+const register = require("../backend/register");
 
 async function main() {
   const response = await register.handler({

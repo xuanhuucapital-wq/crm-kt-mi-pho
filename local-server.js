@@ -1,4 +1,4 @@
-// Local server nhỏ để test thay cho netlify dev khi Netlify CLI lỗi Node version.
+// Local server nhỏ để chạy frontend và backend mà không cần Wrangler.
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -30,7 +30,7 @@ function readBody(req) {
 
 async function handleFunction(req, res, name) {
   try {
-    const mod = require(path.join(root, "netlify/functions", name));
+    const mod = require(path.join(root, "backend", name));
     const body = await readBody(req);
     const result = await mod.handler({
       httpMethod: req.method,

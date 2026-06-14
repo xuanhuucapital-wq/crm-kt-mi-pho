@@ -1,4 +1,4 @@
-const { loadLocalEnv } = require("../netlify/functions/_sheets");
+const { loadLocalEnv } = require("../backend/_sheets");
 
 loadLocalEnv();
 

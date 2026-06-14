@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const { createSessionToken } = require("../netlify/functions/_auth");
-const { readDatabase } = require("../netlify/functions/_database");
-const crm = require("../netlify/functions/crm");
-const productionInfo = require("../netlify/functions/production-info");
+const { createSessionToken } = require("../backend/_auth");
+const { readDatabase } = require("../backend/_database");
+const crm = require("../backend/crm");
+const productionInfo = require("../backend/production-info");
 
 async function call(handler) {
   const manager = ((await readDatabase()).users || []).find((user) => user.role === "manager" && user.status === "active");

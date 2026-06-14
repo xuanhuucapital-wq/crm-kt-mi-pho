@@ -1,14 +1,14 @@
-import loginFunction from "../netlify/functions/login.js";
-import registerFunction from "../netlify/functions/register.js";
-import logoutFunction from "../netlify/functions/logout.js";
-import crmFunction from "../netlify/functions/crm.js";
-import customersFunction from "../netlify/functions/customers.js";
-import ordersFunction from "../netlify/functions/orders.js";
-import paymentsFunction from "../netlify/functions/payments.js";
-import productionInfoFunction from "../netlify/functions/production-info.js";
-import usersFunction from "../netlify/functions/users.js";
-import auditLogFunction from "../netlify/functions/audit-log.js";
-import exportDebtsFunction from "../netlify/functions/export-debts.js";
+import loginFunction from "../backend/login.js";
+import registerFunction from "../backend/register.js";
+import logoutFunction from "../backend/logout.js";
+import crmFunction from "../backend/crm.js";
+import customersFunction from "../backend/customers.js";
+import ordersFunction from "../backend/orders.js";
+import paymentsFunction from "../backend/payments.js";
+import productionInfoFunction from "../backend/production-info.js";
+import usersFunction from "../backend/users.js";
+import auditLogFunction from "../backend/audit-log.js";
+import exportDebtsFunction from "../backend/export-debts.js";
 
 const apiRoutes = {
   "/api/login": loginFunction.handler,
@@ -38,7 +38,7 @@ function applyEnvironment(env) {
   });
 }
 
-async function netlifyEvent(request, url, context) {
+async function handlerEvent(request, url, context) {
   const headers = {};
   request.headers.forEach((value, key) => {
     headers[key.toLowerCase()] = value;
@@ -79,7 +79,7 @@ async function handleApi(request, env, url, context) {
     });
   }
   applyEnvironment(env);
-  return workerResponse(await handler(await netlifyEvent(request, url, context)));
+  return workerResponse(await handler(await handlerEvent(request, url, context)));
 }
 
 async function handleAsset(request, env) {

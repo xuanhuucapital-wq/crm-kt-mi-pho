@@ -1,4 +1,4 @@
-const { getValues } = require("../netlify/functions/_sheets");
+const { getValues } = require("../backend/_sheets");
 
 async function main() {
   const sheetName = process.env.MAIN_SHEET_NAME || "Tiền Khách Nợ";

@@ -4,7 +4,7 @@ const {
   appendAudit,
   normalizeText,
   updateDatabase,
-} = require("../netlify/functions/_database");
+} = require("../backend/_database");
 
 const databasePath = process.env.CRM_DATABASE_PATH
   || path.join(process.cwd(), "data", "crm-database.json");
