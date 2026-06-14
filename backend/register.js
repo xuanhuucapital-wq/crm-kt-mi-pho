@@ -7,16 +7,17 @@ const {
 } = require("./_auth");
 const { appendAudit, nextId, normalizeText, updateDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { boundedString, parseJsonBody } = require("./_validation");
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
   try {
-    const payload = JSON.parse(event.body || "{}");
+    const payload = parseJsonBody(event);
     const email = normalizeEmail(payload.email);
-    const displayName = String(payload.displayName || "").trim();
+    const displayName = boundedString(payload.displayName, "họ tên", 100, { required: true });
     const password = String(payload.password || "");
     if (!validateEmail(email)) return jsonResponse(400, { error: "Email không hợp lệ." });
-    if (!displayName) return jsonResponse(400, { error: "Vui lòng nhập họ tên." });
+    if (email.length > 254) return jsonResponse(400, { error: "Email quá dài." });
     if (!validatePassword(password)) {
       return jsonResponse(400, { error: "Mật khẩu cần ít nhất 10 ký tự, gồm chữ và số." });
     }

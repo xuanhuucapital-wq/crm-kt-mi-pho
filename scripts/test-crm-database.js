@@ -7,6 +7,7 @@ const crm = require("../backend/crm");
 const customers = require("../backend/customers");
 const login = require("../backend/login");
 const logout = require("../backend/logout");
+const session = require("../backend/session");
 const orders = require("../backend/orders");
 const payments = require("../backend/payments");
 const productionInfo = require("../backend/production-info");
@@ -51,7 +52,13 @@ async function main() {
     body: JSON.stringify({ email: manager.email, password: "TestPassword123" }),
   });
   if (loginResponse.statusCode !== 200) throw new Error(`Login failed: ${loginResponse.body}`);
-  token = JSON.parse(loginResponse.body).token;
+  const loginCookie = String(loginResponse.headers?.["set-cookie"] || "").split(";")[0];
+  const sessionResponse = await session.handler({
+    httpMethod: "GET",
+    headers: { cookie: loginCookie },
+    queryStringParameters: {},
+  });
+  token = createSessionToken(manager);
   const before = await call(crm.handler, "GET");
   await call(customers.handler, "POST", {
     MaKH: "TEST-CRM",
@@ -258,6 +265,10 @@ async function main() {
     && ["user-login", "user-logout", "user-page-exit", "customer-created", "customer-updated", "order-created", "order-deleted", "payment-recorded", "production-info-created", "production-info-updated"]
       .every((action) => actionNames.has(action))
     && forbiddenAudit.statusCode === 403
+    && loginCookie.startsWith("crm_session=")
+    && loginResponse.headers["set-cookie"].includes("HttpOnly")
+    && loginResponse.headers["set-cookie"].includes("SameSite=Strict")
+    && sessionResponse.statusCode === 200
     && forbiddenDelete.statusCode === 403
     && crossUnitCustomerLink.statusCode === 400
     && deliveryCrmResponse.statusCode === 200

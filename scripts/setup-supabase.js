@@ -6,12 +6,7 @@ const { recalculate } = require("../backend/_database");
 loadLocalEnv();
 
 const managementUrl = "https://api.supabase.com/v1";
-const migrationPath = path.join(
-  process.cwd(),
-  "supabase",
-  "migrations",
-  "202606130001_create_crm_state.sql",
-);
+const migrationsDirectory = path.join(process.cwd(), "supabase", "migrations");
 const databasePath = path.join(process.cwd(), "data", "crm-database.json");
 const envPath = path.join(process.cwd(), ".env");
 
@@ -91,12 +86,16 @@ async function importDatabase(supabaseUrl, serviceKey) {
 
 async function main() {
   const projectRef = required("SUPABASE_PROJECT_REF");
-  const migration = fs.readFileSync(migrationPath, "utf8");
-
-  await managementRequest(`/projects/${projectRef}/database/query`, {
-    method: "POST",
-    body: JSON.stringify({ query: migration, read_only: false }),
-  });
+  const migrationFiles = fs.readdirSync(migrationsDirectory)
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  for (const migrationFile of migrationFiles) {
+    const migration = fs.readFileSync(path.join(migrationsDirectory, migrationFile), "utf8");
+    await managementRequest(`/projects/${projectRef}/database/query`, {
+      method: "POST",
+      body: JSON.stringify({ query: migration, read_only: false }),
+    });
+  }
 
   const keys = await managementRequest(`/projects/${projectRef}/api-keys`, { method: "GET" });
   const backendKey = (keys || []).find((key) => (
@@ -120,7 +119,7 @@ async function main() {
   console.log(JSON.stringify({
     connected: true,
     projectRef,
-    migrationApplied: true,
+    migrationsApplied: migrationFiles,
     imported: {
       users: database.users?.length || 0,
       customers: database.crm?.customers?.length || 0,

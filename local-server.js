@@ -62,6 +62,9 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/logout") {
     return handleFunction(req, res, "logout");
   }
+  if (url.pathname === "/api/session") {
+    return handleFunction(req, res, "session");
+  }
   if (url.pathname === "/api/users") {
     return handleFunction(req, res, "users");
   }

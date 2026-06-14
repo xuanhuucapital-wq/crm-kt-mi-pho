@@ -5,6 +5,7 @@ const { jsonResponse, loadLocalEnv } = require("./_sheets");
 loadLocalEnv();
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const SESSION_COOKIE = "crm_session";
 let developmentSecret = "";
 
 function authError(message, statusCode = 401) {
@@ -14,7 +15,12 @@ function authError(message, statusCode = 401) {
 }
 
 function tokenSecret() {
-  if (process.env.APP_AUTH_SECRET) return process.env.APP_AUTH_SECRET;
+  if (process.env.APP_AUTH_SECRET) {
+    if (process.env.NODE_ENV === "production" && process.env.APP_AUTH_SECRET.length < 64) {
+      throw authError("APP_AUTH_SECRET phải có ít nhất 64 ký tự.", 500);
+    }
+    return process.env.APP_AUTH_SECRET;
+  }
   if (process.env.NODE_ENV === "production") {
     throw authError("Máy chủ chưa cấu hình APP_AUTH_SECRET.", 500);
   }
@@ -32,7 +38,7 @@ function validateEmail(email) {
 
 function validatePassword(password) {
   const value = String(password || "");
-  return value.length >= 10 && /[a-zA-Z]/.test(value) && /\d/.test(value);
+  return value.length >= 10 && value.length <= 128 && /[a-zA-Z]/.test(value) && /\d/.test(value);
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -96,7 +102,9 @@ function createSessionToken(user) {
 
 function verifySessionToken(token) {
   if (!token || !token.includes(".")) throw authError("Vui lòng đăng nhập.");
-  const [encodedPayload, signature] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) throw authError("Phiên đăng nhập không hợp lệ.");
+  const [encodedPayload, signature] = parts;
   const expectedSignature = signPayload(encodedPayload);
   if (
     signature.length !== expectedSignature.length
@@ -113,6 +121,9 @@ function verifySessionToken(token) {
   if (!payload.exp || payload.exp < Date.now()) {
     throw authError("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
   }
+  if (!Number.isInteger(Number(payload.sub)) || !payload.email || !payload.role) {
+    throw authError("Phiên đăng nhập không hợp lệ.");
+  }
   return payload;
 }
 
@@ -123,8 +134,24 @@ function getBearerToken(event) {
     .trim();
 }
 
+function getCookieToken(event) {
+  const headers = event.headers || {};
+  const cookie = String(headers.cookie || headers.Cookie || "");
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`));
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+function sessionCookie(token) {
+  const maxAge = Math.floor(TOKEN_TTL_MS / 1000);
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function clearSessionCookie() {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
+
 async function requireAuth(event) {
-  const payload = verifySessionToken(getBearerToken(event));
+  const payload = verifySessionToken(getCookieToken(event) || getBearerToken(event));
   const database = await readDatabase();
   const user = (database.users || []).find((item) => Number(item.id) === Number(payload.sub));
   if (!user || user.status !== "active") {
@@ -133,7 +160,7 @@ async function requireAuth(event) {
   if (Number(user.tokenVersion || 0) !== Number(payload.tokenVersion || 0)) {
     throw authError("Quyền tài khoản đã thay đổi, vui lòng đăng nhập lại.");
   }
-  return publicUser(user);
+  return { ...publicUser(user), tokenVersion: Number(user.tokenVersion || 0) };
 }
 
 async function requireRole(event, roles) {
@@ -150,6 +177,7 @@ function authErrorResponse(error) {
 module.exports = {
   authError,
   authErrorResponse,
+  clearSessionCookie,
   createSessionToken,
   hashPassword,
   normalizeEmail,
@@ -157,6 +185,7 @@ module.exports = {
   requireBusinessUnit,
   requireAuth,
   requireRole,
+  sessionCookie,
   validateEmail,
   validatePassword,
   verifyPassword,

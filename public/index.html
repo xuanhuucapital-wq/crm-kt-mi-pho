@@ -16,8 +16,8 @@
           <h1>CRM Nhà Xưởng</h1>
           <p>Quản lý xưởng mì và xưởng phở trong cùng một hệ thống.</p>
         </div>
-        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
-        <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required /></label>
+        <label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required /></label>
+        <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="128" required /></label>
         <button class="primary" type="submit">Đăng nhập</button>
         <button id="showRegister" class="login-link" type="button">Đăng ký tài khoản giao hàng</button>
         <div id="loginResult" class="notice" role="status"></div>
@@ -28,9 +28,9 @@
           <h1>Đăng ký tài khoản</h1>
           <p>Tài khoản mới cần quản lý phê duyệt trước khi sử dụng.</p>
         </div>
-        <label>Họ tên<input name="displayName" autocomplete="name" required /></label>
-        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
-        <label>Mật khẩu<input name="password" type="password" autocomplete="new-password" minlength="10" required /><small>Ít nhất 10 ký tự, gồm chữ và số.</small></label>
+        <label>Họ tên<input name="displayName" autocomplete="name" maxlength="100" required /></label>
+        <label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required /></label>
+        <label>Mật khẩu<input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><small>Ít nhất 10 ký tự, gồm chữ và số.</small></label>
         <button class="primary" type="submit">Gửi đăng ký</button>
         <button id="showLogin" class="login-link" type="button">Quay lại đăng nhập</button>
         <div id="registerResult" class="notice" role="status"></div>

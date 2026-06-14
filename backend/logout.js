@@ -1,12 +1,13 @@
-const { authErrorResponse, requireAuth } = require("./_auth");
+const { authErrorResponse, clearSessionCookie, requireAuth } = require("./_auth");
 const { appendAudit, updateDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { parseJsonBody } = require("./_validation");
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
   try {
     const sessionUser = await requireAuth(event);
-    const payload = JSON.parse(event.body || "{}");
+    const payload = parseJsonBody(event);
     const pageExit = payload.reason === "page-exit";
     await updateDatabase((database) => {
       const user = (database.users || []).find((item) => Number(item.id) === Number(sessionUser.id));
@@ -27,9 +28,13 @@ exports.handler = async (event) => {
         },
       });
     });
-    return jsonResponse(200, { ok: true });
+    return jsonResponse(200, { ok: true }, { "set-cookie": clearSessionCookie() });
   } catch (error) {
-    if (error.statusCode) return authErrorResponse(error);
+    if (error.statusCode) {
+      const response = authErrorResponse(error);
+      response.headers["set-cookie"] = clearSessionCookie();
+      return response;
+    }
     return jsonResponse(400, { error: error.message });
   }
 };

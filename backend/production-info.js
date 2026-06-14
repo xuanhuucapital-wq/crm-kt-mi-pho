@@ -1,16 +1,17 @@
 const { authErrorResponse, requireAuth, requireBusinessUnit } = require("./_auth");
 const { appendAudit, nextId, normalizeBusinessUnit, normalizeText, readDatabase, updateDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { boundedString, parseJsonBody } = require("./_validation");
 
 function fields(payload) {
   return {
-    customer: String(payload.customer || "").trim(),
-    usualOrder: String(payload.usualOrder || "").trim(),
-    production: String(payload.production || "").trim(),
-    delivery: String(payload.delivery || "").trim(),
-    additional: String(payload.additional || "").trim(),
-    invoice: String(payload.invoice || "").trim(),
-    customerCode: String(payload.customerCode || "").trim(),
+    customer: boundedString(payload.customer, "tên khách hàng", 200),
+    usualOrder: boundedString(payload.usualOrder, "đơn thường lấy", 1000),
+    production: boundedString(payload.production, "thông tin sản xuất", 2000),
+    delivery: boundedString(payload.delivery, "thông tin giao hàng", 1000),
+    additional: boundedString(payload.additional, "thông tin bổ sung", 2000),
+    invoice: boundedString(payload.invoice, "thông tin hóa đơn", 1000),
+    customerCode: boundedString(payload.customerCode, "mã khách", 50),
   };
 }
 
@@ -27,7 +28,7 @@ function matchCustomer(entry, customers) {
 exports.handler = async (event) => {
   try {
     const sessionUser = await requireAuth(event);
-    const payload = ["POST", "PUT"].includes(event.httpMethod) ? JSON.parse(event.body || "{}") : {};
+    const payload = ["POST", "PUT"].includes(event.httpMethod) ? parseJsonBody(event) : {};
     const businessUnit = requireBusinessUnit(
       sessionUser,
       payload.businessUnit || event.queryStringParameters?.businessUnit,

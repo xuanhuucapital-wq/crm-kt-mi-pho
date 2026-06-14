@@ -1,11 +1,12 @@
 const { authErrorResponse, requireBusinessUnit, requireRole } = require("./_auth");
 const { appendAudit, nextId, normalizeBusinessUnit, normalizeText, readDatabase, updateDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { boundedString, parseJsonBody } = require("./_validation");
 
 exports.handler = async (event) => {
   try {
     const manager = await requireRole(event, "manager");
-    const payload = event.httpMethod === "POST" ? JSON.parse(event.body || "{}") : {};
+    const payload = event.httpMethod === "POST" ? parseJsonBody(event) : {};
     const businessUnit = requireBusinessUnit(
       manager,
       payload.businessUnit || event.queryStringParameters?.businessUnit,
@@ -22,10 +23,14 @@ exports.handler = async (event) => {
     if (!Number.isFinite(amount) || amount <= 0) {
       return jsonResponse(400, { error: "Số tiền thanh toán phải lớn hơn 0." });
     }
+    if (amount > 10000000000) {
+      return jsonResponse(400, { error: "Số tiền thanh toán vượt quá giới hạn cho phép." });
+    }
+    const customerCode = boundedString(payload.customerCode, "mã khách", 50, { required: true });
     const payment = await updateDatabase((database) => {
       const customer = database.crm.customers.find(
         (item) => normalizeBusinessUnit(item.businessUnit) === businessUnit
-          && normalizeText(item.MaKH) === normalizeText(payload.customerCode),
+          && normalizeText(item.MaKH) === normalizeText(customerCode),
       );
       if (!customer) throw new Error("Không tìm thấy khách hàng.");
       const orders = database.crm.orders
@@ -56,8 +61,8 @@ exports.handler = async (event) => {
         customerCode: customer.MaKH,
         customerName: customer.TenKH,
         amount,
-        date: String(payload.date || "").trim(),
-        note: String(payload.note || "").trim(),
+        date: boundedString(payload.date, "ngày thanh toán", 10, { required: true }),
+        note: boundedString(payload.note, "ghi chú", 1000),
         allocations,
         businessUnit,
         createdAt: new Date().toISOString(),

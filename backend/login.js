@@ -2,6 +2,7 @@ const {
   createSessionToken,
   normalizeEmail,
   publicUser,
+  sessionCookie,
   verifyPassword,
 } = require("./_auth");
 const {
@@ -11,6 +12,7 @@ const {
   updateDatabase,
 } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { parseJsonBody } = require("./_validation");
 
 const attempts = new Map();
 
@@ -42,9 +44,12 @@ function clearRateLimit(key) {
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
   try {
-    const payload = JSON.parse(event.body || "{}");
+    const payload = parseJsonBody(event);
     const email = normalizeEmail(payload.email);
     const password = String(payload.password || "");
+    if (!email || email.length > 254 || password.length > 128) {
+      return jsonResponse(400, { error: "Thông tin đăng nhập không hợp lệ." });
+    }
     const key = clientKey(event, email);
     checkRateLimit(key);
 
@@ -66,7 +71,8 @@ exports.handler = async (event) => {
       throw error;
     }
 
-    const result = { token: createSessionToken(user), user: publicUser(user) };
+    const token = createSessionToken(user);
+    const result = { user: publicUser(user) };
     const recordLogin = () => updateDatabase((currentDatabase) => {
       const currentUser = (currentDatabase.users || []).find((item) => Number(item.id) === Number(user.id));
       if (!currentUser) return;
@@ -90,7 +96,7 @@ exports.handler = async (event) => {
       await recordLogin();
     }
     clearRateLimit(key);
-    return jsonResponse(200, result);
+    return jsonResponse(200, result, { "set-cookie": sessionCookie(token) });
   } catch (error) {
     return jsonResponse(error.statusCode || 400, { error: error.message });
   }

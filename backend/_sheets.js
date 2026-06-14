@@ -65,13 +65,14 @@ function requiredEnv(name) {
 }
 
 // Tạo phản hồi JSON chuẩn cho các API handler.
-function jsonResponse(statusCode, body) {
+function jsonResponse(statusCode, body, headers = {}) {
   return {
     // HTTP status, ví dụ 200 thành công, 400 lỗi nhập liệu.
     statusCode,
     // Header báo trình duyệt biết body là JSON tiếng Việt.
     headers: {
       "content-type": "application/json; charset=utf-8",
+      ...headers,
     },
     // Chuyển object thành chuỗi JSON.
     body: JSON.stringify(body),

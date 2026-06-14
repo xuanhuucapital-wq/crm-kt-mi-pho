@@ -1,6 +1,7 @@
 const { authErrorResponse, publicUser, requireRole } = require("./_auth");
 const { appendAudit, updateDatabase, readDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { parseJsonBody } = require("./_validation");
 
 const allowedRoles = ["delivery", "manager"];
 const allowedStatuses = ["pending", "active", "disabled"];
@@ -16,7 +17,7 @@ exports.handler = async (event) => {
       return jsonResponse(200, { users });
     }
     if (event.httpMethod !== "PUT") return jsonResponse(405, { error: "Method not allowed" });
-    const payload = JSON.parse(event.body || "{}");
+    const payload = parseJsonBody(event);
     const user = await updateDatabase((database) => {
       const current = (database.users || []).find((item) => Number(item.id) === Number(payload.id));
       if (!current) throw new Error("Không tìm thấy người dùng.");

@@ -1,6 +1,6 @@
 const state = {
   token: localStorage.getItem("nhapLieuAuthToken") || "",
-  user: JSON.parse(localStorage.getItem("nhapLieuAuthUser") || "null"),
+  user: null,
   customers: [],
   orders: [],
   productionInfo: [],
@@ -117,7 +117,9 @@ function unitUrl(path) {
 }
 
 function authHeaders(extra = {}) {
-  return { ...extra, authorization: `Bearer ${state.token}` };
+  return state.token
+    ? { ...extra, authorization: `Bearer ${state.token}` }
+    : { ...extra };
 }
 
 async function readApiResponse(response) {
@@ -337,23 +339,24 @@ function clearLocalSession() {
 
 async function logout() {
   state.explicitLogout = true;
-  const token = state.token;
-  clearLocalSession();
-  if (!token) return;
+  const hadSession = Boolean(state.user || state.token);
+  if (!hadSession) return;
   try {
     await fetch("/api/logout", {
       method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ reason: "explicit-logout" }),
       keepalive: true,
     });
   } catch {
-    // The local session stays cleared if the server is temporarily unavailable.
+    // The local state is still cleared if the server is temporarily unavailable.
+  } finally {
+    clearLocalSession();
   }
 }
 
 function renderAuth() {
-  const loggedIn = Boolean(state.token && state.user);
+  const loggedIn = Boolean(state.user);
   const isManager = state.user?.role === "manager";
   $("#loginPanel").classList.toggle("hidden", loggedIn);
   $("#appPanel").classList.toggle("hidden", !loggedIn);
@@ -1928,10 +1931,10 @@ $("#loginForm").addEventListener("submit", async (event) => {
     const response = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
     const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Đăng nhập thất bại.");
-    state.token = data.token;
     state.user = data.user;
-    localStorage.setItem("nhapLieuAuthToken", data.token);
-    localStorage.setItem("nhapLieuAuthUser", JSON.stringify(data.user));
+    localStorage.removeItem("nhapLieuAuthToken");
+    localStorage.removeItem("nhapLieuAuthUser");
+    state.token = "";
     renderAuth();
     await loadCrm();
   } catch (error) {
@@ -2382,7 +2385,7 @@ $("#exportDebtsExcel").addEventListener("click", async () => {
 });
 $("#logoutButton").addEventListener("click", logout);
 window.addEventListener("pagehide", () => {
-  if (!state.token || state.explicitLogout) return;
+  if (!state.user || state.explicitLogout) return;
   fetch("/api/logout", {
     method: "POST",
     headers: authHeaders({ "content-type": "application/json" }),
@@ -2499,9 +2502,23 @@ $("#orderDate").value = new Date(Date.now() - new Date().getTimezoneOffset() * 6
 
 applyBusinessUnitUi();
 renderAuth();
-if (state.token) {
-  loadCrm().catch((error) => {
+async function restoreSession() {
+  const hadLegacyToken = Boolean(state.token);
+  try {
+    const response = await fetch("/api/session", { headers: authHeaders() });
+    const data = await readApiResponse(response);
+    if (!response.ok) throw new Error(data.error || "Phiên đăng nhập không còn hiệu lực.");
+    state.user = data.user;
+    state.token = "";
+    localStorage.removeItem("nhapLieuAuthToken");
+    localStorage.removeItem("nhapLieuAuthUser");
+    renderAuth();
+    await loadCrm();
+  } catch (error) {
     clearLocalSession();
-    notice($("#loginResult"), `${error.message} Vui lòng đăng nhập lại bằng email.`, "error");
-  });
+    if (hadLegacyToken) {
+      notice($("#loginResult"), `${error.message} Vui lòng đăng nhập lại bằng email.`, "error");
+    }
+  }
 }
+restoreSession();

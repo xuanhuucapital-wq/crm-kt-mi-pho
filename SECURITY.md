@@ -6,8 +6,10 @@
 - Mật khẩu dùng `scrypt` và salt ngẫu nhiên riêng cho từng user.
 - Đăng ký email mới mặc định chờ quản lý duyệt.
 - RBAC được kiểm tra tại backend cho vai trò `delivery` và `manager`.
-- Token hết hạn sau 12 giờ và bị thu hồi khi user đổi quyền hoặc bị khóa.
-- Giới hạn đăng nhập sai, giới hạn request body và thêm security headers/CSP.
+- Session cookie `HttpOnly; Secure; SameSite=Strict` hết hạn sau 12 giờ và bị
+  thu hồi khi user đổi quyền hoặc bị khóa.
+- Giới hạn đăng nhập/API theo IP, giới hạn request body, kiểm tra same-origin và
+  thêm security headers/CSP/HSTS.
 - Database, snapshot, file Excel và `.env` bị loại khỏi Git.
 - Toàn bộ thư mục `data/` và file backup `.bak` bị loại khỏi Git.
 - Ghi audit log cho tạo/copy đơn và thay đổi quyền user.
@@ -21,12 +23,13 @@
 2. Bật HTTPS và đặt `APP_AUTH_SECRET` ngẫu nhiên tối thiểu 64 ký tự.
 3. Lưu secrets trong Cloudflare secret manager, không lưu trong Git.
 4. Thiết lập backup tự động, kiểm thử phục hồi và retention.
-5. Thêm rate limit dùng Redis/KV ở gateway; rate limit trong RAM hiện chỉ phù hợp một instance.
-6. Chuyển bearer token phía trình duyệt sang cookie `HttpOnly; Secure; SameSite=Strict`.
-7. Bật MFA cho tài khoản quản lý.
-8. Gửi audit log sang kho append-only, không để chung database nghiệp vụ.
-9. Chạy dependency audit, secret scanning và SAST trong CI.
-10. Chỉ cho phép domain production, không public localhost hoặc file database.
+5. Bật Cloudflare WAF/Bot Protection và rate limiting rule tại edge.
+6. Bật MFA cho tài khoản quản lý khi bổ sung nhà cung cấp xác thực hỗ trợ MFA.
+7. Gửi audit log sang kho append-only, không để chung database nghiệp vụ.
+8. Bật GitHub secret scanning, push protection và Dependabot.
+9. Chỉ cho phép domain production, không public localhost hoặc file database.
+
+Trạng thái đầy đủ theo checklist nằm trong `SECURITY_CHECKLIST.md`.
 
 ## Phân quyền
 

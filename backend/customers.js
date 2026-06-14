@@ -1,6 +1,7 @@
 const { authErrorResponse, requireAuth, requireBusinessUnit } = require("./_auth");
 const { appendAudit, normalizeBusinessUnit, normalizeText, readDatabase, updateDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { boundedString, finiteNumber, parseJsonBody } = require("./_validation");
 
 const editableFields = [
   "TenKH",
@@ -48,7 +49,7 @@ function sortCustomers(first, second) {
 exports.handler = async (event) => {
   try {
     const sessionUser = await requireAuth(event);
-    const payload = ["POST", "PUT"].includes(event.httpMethod) ? JSON.parse(event.body || "{}") : {};
+    const payload = ["POST", "PUT"].includes(event.httpMethod) ? parseJsonBody(event) : {};
     const requestedUnit = payload.businessUnit || event.queryStringParameters?.businessUnit;
     const businessUnit = requireBusinessUnit(sessionUser, requestedUnit);
     if (event.httpMethod === "GET") {
@@ -66,9 +67,8 @@ exports.handler = async (event) => {
       return jsonResponse(403, { error: "Chỉ tài khoản quản lý được thay đổi khách hàng." });
     }
     if (event.httpMethod === "POST") {
-      const code = String(payload.MaKH || "").trim();
-      const name = String(payload.TenKH || "").trim();
-      if (!code || !name) return jsonResponse(400, { error: "Vui lòng nhập mã khách và tên khách hàng." });
+      const code = boundedString(payload.MaKH, "mã khách", 50, { required: true });
+      const name = boundedString(payload.TenKH, "tên khách hàng", 200, { required: true });
       const customer = await updateDatabase((database) => {
         const customers = database.crm.customers;
         if (customers.some((item) => (
@@ -80,15 +80,15 @@ exports.handler = async (event) => {
         const created = {
           MaKH: code,
           TenKH: name,
-          GiaMi: Number(payload.GiaMi || 0),
-          GiaCao: Number(payload.GiaCao || 0),
-          GiaHoanh: Number(payload.GiaHoanh || 0),
-          GiaPhoSoi: Number(payload.GiaPhoSoi || 0),
-          GiaPhoCuon: Number(payload.GiaPhoCuon || 0),
+          GiaMi: finiteNumber(payload.GiaMi, "Giá mì", { minimum: 0, maximum: 10000000 }),
+          GiaCao: finiteNumber(payload.GiaCao, "Giá cảo", { minimum: 0, maximum: 10000000 }),
+          GiaHoanh: finiteNumber(payload.GiaHoanh, "Giá hoành", { minimum: 0, maximum: 10000000 }),
+          GiaPhoSoi: finiteNumber(payload.GiaPhoSoi, "Giá phở sợi", { minimum: 0, maximum: 10000000 }),
+          GiaPhoCuon: finiteNumber(payload.GiaPhoCuon, "Giá phở cuốn", { minimum: 0, maximum: 10000000 }),
           businessUnit,
-          NhaXeMacDinh: String(payload.NhaXeMacDinh || "").trim(),
+          NhaXeMacDinh: boundedString(payload.NhaXeMacDinh, "nhà xe mặc định", 150),
           ChinhSachThue: payload.ChinhSachThue || "linh-hoat",
-          ThueSuat: Number(payload.ThueSuat || 0),
+          ThueSuat: finiteNumber(payload.ThueSuat, "Thuế suất", { minimum: 0, maximum: 100 }),
           TrangThai: "active",
         };
         customers.push(created);
@@ -135,9 +135,14 @@ exports.handler = async (event) => {
         const before = { ...customer };
         editableFields.forEach((field) => {
           if (payload[field] === undefined) return;
-          customer[field] = ["GiaMi", "GiaCao", "GiaHoanh", "GiaPhoSoi", "GiaPhoCuon", "ThueSuat"].includes(field)
-            ? Number(payload[field] || 0)
-            : String(payload[field] || "").trim();
+          if (["GiaMi", "GiaCao", "GiaHoanh", "GiaPhoSoi", "GiaPhoCuon"].includes(field)) {
+            customer[field] = finiteNumber(payload[field], field, { minimum: 0, maximum: 10000000 });
+          } else if (field === "ThueSuat") {
+            customer[field] = finiteNumber(payload[field], "Thuế suất", { minimum: 0, maximum: 100 });
+          } else {
+            const maximum = field === "TenKH" ? 200 : 150;
+            customer[field] = boundedString(payload[field], field, maximum, { required: field === "TenKH" });
+          }
         });
         let syncedOrders = 0;
         let syncedProduction = 0;

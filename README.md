@@ -104,7 +104,7 @@ Trước lần đầu chạy, đăng nhập Wrangler và khai báo các secret b
 
 ## Khởi tạo Supabase
 
-1. Chạy SQL trong `supabase/migrations/202606130001_create_crm_state.sql`.
+1. Chạy lần lượt toàn bộ file SQL trong `supabase/migrations/` theo thứ tự tên.
 2. Khai báo `SUPABASE_URL` và `SUPABASE_SECRET_KEY`.
 3. Import dữ liệu hiện tại:
 

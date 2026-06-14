@@ -1,11 +1,17 @@
 const { authErrorResponse, requireAuth, requireBusinessUnit } = require("./_auth");
 const { appendAudit, nextId, normalizeBusinessUnit, normalizeOrder, normalizeText, updateDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const { boundedString, parseJsonBody } = require("./_validation");
 
 function numberValue(value) {
   const raw = String(value ?? "").trim().replace(/\./g, "").replace(",", ".");
   const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1000000000) {
+    const error = new Error("Giá trị số không hợp lệ.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return parsed;
 }
 
 function booleanValue(value) {
@@ -35,7 +41,12 @@ function applyPayload(order, payload, businessUnit, options = {}) {
   const paymentMethod = ["debt", "cash", "transfer"].includes(payload.paymentMethod)
     ? payload.paymentMethod
     : order.paymentMethod || "debt";
-  order.date = String(payload.orderDate || order.date || "").trim();
+  order.date = boundedString(payload.orderDate || order.date, "ngày đặt", 10);
+  if (order.date && !/^\d{4}-\d{2}-\d{2}$/.test(order.date)) {
+    const error = new Error("Ngày đặt không hợp lệ.");
+    error.statusCode = 400;
+    throw error;
+  }
   order.miKg = resting ? 0 : numberValue(payload.miKg);
   order.caoKg = resting ? 0 : numberValue(payload.caoKg);
   order.hoanhKg = resting ? 0 : numberValue(payload.hoanhKg);
@@ -50,6 +61,11 @@ function applyPayload(order, payload, businessUnit, options = {}) {
   order.phoCuonKg = resting ? 0 : numberValue(payload.phoCuonKg);
   order.advance = numberValue(payload.tienUng);
   order.taxRate = numberValue(payload.taxRate);
+  if (order.taxRate > 100) {
+    const error = new Error("Thuế suất không được vượt quá 100%.");
+    error.statusCode = 400;
+    throw error;
+  }
   order.taxPayer = payload.taxPayer || order.taxPayer || "customer";
   const calculatedTax = (
     businessUnit === "pho"
@@ -65,14 +81,14 @@ function applyPayload(order, payload, businessUnit, options = {}) {
     order.paid = numberValue(payload.paid ?? order.paid);
   }
   order.customerResting = resting;
-  order.truck = resting ? "" : String(payload.nhaXe || "").trim();
-  order.extraShipCustomer = String(payload.extraShipCustomer || "").trim();
+  order.truck = resting ? "" : boundedString(payload.nhaXe, "nhà xe", 150);
+  order.extraShipCustomer = boundedString(payload.extraShipCustomer, "khách phụ ship", 150);
   const paymentNote = paymentMethod === "cash"
     ? "Tiền mặt"
     : paymentMethod === "transfer"
       ? "Chuyển khoản"
       : "";
-  order.note = [String(payload.ghiChu || "").trim(), paymentNote].filter(Boolean).join(" | ");
+  order.note = [boundedString(payload.ghiChu, "ghi chú", 1000), paymentNote].filter(Boolean).join(" | ");
   normalizeOrder(order);
   if (paymentMethod === "cash" || paymentMethod === "transfer") {
     order.paid = order.total;
@@ -87,7 +103,7 @@ exports.handler = async (event) => {
   }
   try {
     const sessionUser = await requireAuth(event);
-    const payload = JSON.parse(event.body || "{}");
+    const payload = parseJsonBody(event);
     const businessUnit = requireBusinessUnit(
       sessionUser,
       payload.businessUnit || event.queryStringParameters?.businessUnit,
