@@ -129,6 +129,13 @@ async function readApiResponse(response) {
     return JSON.parse(text);
   } catch {
     const status = response.status ? ` (HTTP ${response.status})` : "";
+    if (!response.ok) {
+      return {
+        error: response.status === 503
+          ? "Máy chủ hoặc database đang bận, vui lòng thử lại sau vài giây."
+          : `Máy chủ tạm thời không phản hồi đúng định dạng${status}. Vui lòng thử lại.`,
+      };
+    }
     throw new Error(`Máy chủ tạm thời trả phản hồi không hợp lệ${status}. Vui lòng thử lại.`);
   }
 }

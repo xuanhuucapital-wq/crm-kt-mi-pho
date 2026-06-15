@@ -170,8 +170,24 @@ async function main() {
     customerCode: "TEST-CRM",
     production: "Đã sửa quy cách",
   });
-  await call(logout.handler, "POST", { reason: "page-exit" });
-  await call(logout.handler, "POST", { reason: "explicit-logout" });
+  const pageExitResponse = await logout.handler({
+    httpMethod: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ reason: "page-exit" }),
+    queryStringParameters: {},
+  });
+  if (pageExitResponse.statusCode < 200 || pageExitResponse.statusCode >= 300) {
+    throw new Error(`page-exit logout failed: ${pageExitResponse.body}`);
+  }
+  const explicitLogoutResponse = await logout.handler({
+    httpMethod: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ reason: "explicit-logout" }),
+    queryStringParameters: {},
+  });
+  if (explicitLogoutResponse.statusCode < 200 || explicitLogoutResponse.statusCode >= 300) {
+    throw new Error(`explicit logout failed: ${explicitLogoutResponse.body}`);
+  }
   token = createSessionToken((await readDatabase()).users.find((user) => user.id === manager.id));
   const after = await call(crm.handler, "GET");
   const phoResponse = await crm.handler({
@@ -268,6 +284,8 @@ async function main() {
     && loginCookie.startsWith("crm_session=")
     && loginResponse.headers["set-cookie"].includes("HttpOnly")
     && loginResponse.headers["set-cookie"].includes("SameSite=Strict")
+    && !pageExitResponse.headers["set-cookie"]
+    && explicitLogoutResponse.headers["set-cookie"]?.includes("Max-Age=0")
     && sessionResponse.statusCode === 200
     && forbiddenDelete.statusCode === 403
     && crossUnitCustomerLink.statusCode === 400

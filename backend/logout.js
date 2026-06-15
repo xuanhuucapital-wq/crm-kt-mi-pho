@@ -28,7 +28,11 @@ exports.handler = async (event) => {
         },
       });
     });
-    return jsonResponse(200, { ok: true }, { "set-cookie": clearSessionCookie() });
+    return jsonResponse(
+      200,
+      { ok: true },
+      pageExit ? {} : { "set-cookie": clearSessionCookie() },
+    );
   } catch (error) {
     if (error.statusCode) {
       const response = authErrorResponse(error);

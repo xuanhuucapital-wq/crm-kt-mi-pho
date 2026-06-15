@@ -13,6 +13,13 @@ const MAX_UPDATE_RETRIES = 8;
 let writeQueue = Promise.resolve();
 
 const BUSINESS_UNITS = ["mi", "pho"];
+const SUPABASE_TIMEOUT_MS = 15000;
+
+function databaseUnavailableError(message = "Database tạm thời không phản hồi. Vui lòng thử lại.") {
+  const error = new Error(message);
+  error.statusCode = 503;
+  return error;
+}
 
 function normalizeBusinessUnit(value) {
   return BUSINESS_UNITS.includes(String(value || "").toLowerCase())
@@ -109,10 +116,24 @@ function supabaseHeaders(extra = {}) {
 
 async function supabaseRequest(pathname, options = {}) {
   const baseUrl = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    ...options,
-    headers: supabaseHeaders(options.headers),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SUPABASE_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${pathname}`, {
+      ...options,
+      signal: controller.signal,
+      headers: supabaseHeaders(options.headers),
+    });
+  } catch (error) {
+    throw databaseUnavailableError(
+      error.name === "AbortError"
+        ? "Database phản hồi quá lâu. Vui lòng thử lại."
+        : "Không kết nối được database. Vui lòng thử lại.",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await response.text();
   let body = null;
   if (text) {
@@ -124,6 +145,9 @@ async function supabaseRequest(pathname, options = {}) {
   }
   if (!response.ok) {
     const message = body?.message || body?.hint || body?.error || text || `HTTP ${response.status}`;
+    if (response.status >= 500) {
+      throw databaseUnavailableError("Database tạm thời gặp lỗi. Vui lòng thử lại.");
+    }
     throw new Error(`Supabase database error: ${message}`);
   }
   return body;
