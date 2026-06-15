@@ -6,10 +6,8 @@ const {
   verifyPassword,
 } = require("./_auth");
 const {
-  appendAudit,
   normalizeText,
   readDatabase,
-  updateDatabase,
 } = require("./_database");
 const { jsonResponse } = require("./_sheets");
 const { parseJsonBody } = require("./_validation");
@@ -133,28 +131,6 @@ exports.handler = async (event) => {
 
     const token = createSessionToken(user);
     const result = { user: publicUser(user) };
-    const recordLogin = () => updateDatabase((currentDatabase) => {
-      const currentUser = (currentDatabase.users || []).find((item) => Number(item.id) === Number(user.id));
-      if (!currentUser) return;
-      currentUser.lastLoginAt = new Date().toISOString();
-      appendAudit(currentDatabase, {
-        action: "user-login",
-        actorUserId: currentUser.id,
-        actorEmail: currentUser.email,
-        actorName: currentUser.displayName,
-        summary: `${currentUser.displayName} đăng nhập hệ thống.`,
-        details: {
-          role: currentUser.role,
-          ip: clientIp(event),
-          userAgent: String(event.headers?.["user-agent"] || event.headers?.["User-Agent"] || ""),
-        },
-      });
-    });
-    if (typeof event.waitUntil === "function") {
-      event.waitUntil(recordLogin().catch((error) => console.error("Không ghi được nhật ký đăng nhập:", error)));
-    } else {
-      await recordLogin();
-    }
     clearFailedLoginLimit(key);
     return jsonResponse(200, result, { "set-cookie": sessionCookie(token) });
   } catch (error) {

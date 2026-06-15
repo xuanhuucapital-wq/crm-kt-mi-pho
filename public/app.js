@@ -1489,32 +1489,17 @@ function renderAll() {
 async function loadCrm() {
   $("#syncStatus").textContent = "Đang tải dữ liệu CRM...";
   const isManager = state.user?.role === "manager";
-  const requests = [fetch(unitUrl("/api/crm"), { headers: authHeaders() })];
-  if (isManager) {
-    requests.push(
-      fetch(unitUrl("/api/production-info"), { headers: authHeaders() }),
-      fetch(unitUrl("/api/payments"), { headers: authHeaders() }),
-      fetch("/api/users", { headers: authHeaders() }),
-      fetch(unitUrl("/api/audit-log?limit=500"), { headers: authHeaders() }),
-    );
-  }
-  const responses = await Promise.all(requests);
-  const data = await Promise.all(responses.map(readApiResponse));
-  const [crmResponse, productionResponse, paymentResponse, userResponse, auditResponse] = responses;
-  const [crmData, productionData = {}, paymentData = {}, userData = {}, auditData = {}] = data;
+  const crmResponse = await fetch(unitUrl(isManager ? "/api/crm?include=manager" : "/api/crm"), { headers: authHeaders() });
+  const crmData = await readApiResponse(crmResponse);
   if (!crmResponse.ok) throw new Error(crmData.error || "Không tải được database CRM.");
-  if (isManager && !productionResponse.ok) throw new Error(productionData.error || "Không tải được thông tin sản xuất.");
-  if (isManager && !paymentResponse.ok) throw new Error(paymentData.error || "Không tải được lịch sử thanh toán.");
-  if (isManager && !userResponse.ok) throw new Error(userData.error || "Không tải được người dùng.");
-  if (isManager && !auditResponse.ok) throw new Error(auditData.error || "Không tải được nhật ký hoạt động.");
   state.customers = crmData.customers || [];
   state.orders = (crmData.orders || []).sort(newestOrderFirst);
-  state.productionInfo = productionData.entries || [];
-  state.productionInfoTitle = productionData.title || "";
+  state.productionInfo = crmData.productionInfo?.entries || [];
+  state.productionInfoTitle = crmData.productionInfo?.title || "";
   state.summary = crmData.summary || {};
-  state.payments = paymentData.payments || [];
-  state.users = userData.users || [];
-  state.auditLog = auditData.entries || [];
+  state.payments = crmData.payments || [];
+  state.users = crmData.users || [];
+  state.auditLog = crmData.auditLog || [];
   state.offlineCrm = false;
   normalizeCrmFinancials();
   recalculateCrmTotals();

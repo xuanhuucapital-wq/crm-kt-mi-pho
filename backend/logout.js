@@ -9,20 +9,21 @@ exports.handler = async (event) => {
     const sessionUser = await requireAuth(event);
     const payload = parseJsonBody(event);
     const pageExit = payload.reason === "page-exit";
+    if (pageExit) {
+      return jsonResponse(200, { ok: true });
+    }
     await updateDatabase((database) => {
       const user = (database.users || []).find((item) => Number(item.id) === Number(sessionUser.id));
-      if (!pageExit && user) user.tokenVersion = Number(user.tokenVersion || 0) + 1;
+      if (user) user.tokenVersion = Number(user.tokenVersion || 0) + 1;
       appendAudit(database, {
-        action: pageExit ? "user-page-exit" : "user-logout",
+        action: "user-logout",
         actorUserId: sessionUser.id,
         actorEmail: sessionUser.email,
         actorName: sessionUser.displayName,
-        summary: pageExit
-          ? `${sessionUser.displayName} rời trang hoặc đóng tab CRM.`
-          : `${sessionUser.displayName} đăng xuất hệ thống.`,
+        summary: `${sessionUser.displayName} đăng xuất hệ thống.`,
         details: {
           role: sessionUser.role,
-          reason: pageExit ? "page-exit" : "explicit-logout",
+          reason: "explicit-logout",
           ip: String(event.headers?.["x-forwarded-for"] || event.headers?.["client-ip"] || "local").split(",")[0].trim(),
           userAgent: String(event.headers?.["user-agent"] || event.headers?.["User-Agent"] || ""),
         },
@@ -31,7 +32,7 @@ exports.handler = async (event) => {
     return jsonResponse(
       200,
       { ok: true },
-      pageExit ? {} : { "set-cookie": clearSessionCookie() },
+      { "set-cookie": clearSessionCookie() },
     );
   } catch (error) {
     if (error.statusCode) {

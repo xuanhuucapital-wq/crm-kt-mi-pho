@@ -1,5 +1,5 @@
-const { authErrorResponse, requireAuth, requireBusinessUnit } = require("./_auth");
-const { readDatabase, recalculate } = require("./_database");
+const { authErrorResponse, publicUser, requireAuth, requireBusinessUnit } = require("./_auth");
+const { normalizeBusinessUnit, readDatabase, recalculate } = require("./_database");
 const { jsonResponse } = require("./_sheets");
 
 function deliveryCustomer(customer) {
@@ -51,12 +51,50 @@ exports.handler = async (event) => {
         summary: {},
       });
     }
-    return jsonResponse(200, {
+    const response = {
       customers,
       orders,
       summary: database.crm.summaries?.[businessUnit] || {},
       businessUnit,
-    });
+    };
+    if (sessionUser.role === "manager" && event.queryStringParameters?.include === "manager") {
+      const storedEntries = database.auditLog || [];
+      const legacyLoginEntries = (database.users || [])
+        .filter((user) => (
+          user.lastLoginAt
+          && !storedEntries.some((entry) => (
+            entry.action === "user-login"
+            && Number(entry.actorUserId) === Number(user.id)
+          ))
+        ))
+        .map((user) => ({
+          id: `legacy-login-${user.id}`,
+          action: "user-login",
+          actorUserId: user.id,
+          actorEmail: user.email,
+          actorName: user.displayName,
+          summary: `${user.displayName} đăng nhập hệ thống.`,
+          details: { role: user.role, importedLastLogin: true },
+          createdAt: user.lastLoginAt,
+        }));
+      response.productionInfo = {
+        title: database.productionInfo?.title || "Thông tin khách hàng",
+        entries: (database.productionInfo?.entries || []).filter((entry) => (
+          normalizeBusinessUnit(entry.businessUnit) === businessUnit
+        )),
+      };
+      response.payments = (database.payments || []).filter((item) => (
+        normalizeBusinessUnit(item.businessUnit) === businessUnit
+      ));
+      response.users = (database.users || [])
+        .map(publicUser)
+        .sort((first, second) => String(second.createdAt).localeCompare(String(first.createdAt)));
+      response.auditLog = [...storedEntries, ...legacyLoginEntries]
+        .sort((first, second) => String(second.createdAt || "").localeCompare(String(first.createdAt || "")))
+        .filter((entry) => !entry.businessUnit || normalizeBusinessUnit(entry.businessUnit) === businessUnit)
+        .slice(0, 500);
+    }
+    return jsonResponse(200, response);
   } catch (error) {
     if (error.statusCode) return authErrorResponse(error);
     return jsonResponse(500, { error: error.message });

@@ -278,7 +278,7 @@ async function main() {
     && copiedMiOrder.order.paid === 0
     && copiedMiOrder.order.copiedFromOrderId === createdOrder.order.id
     && paymentData.payments.some((item) => item.customerCode === "TEST-CRM")
-    && ["user-login", "user-logout", "user-page-exit", "customer-created", "customer-updated", "order-created", "order-deleted", "payment-recorded", "production-info-created", "production-info-updated"]
+    && ["user-logout", "customer-created", "customer-updated", "order-created", "order-deleted", "payment-recorded", "production-info-created", "production-info-updated"]
       .every((action) => actionNames.has(action))
     && forbiddenAudit.statusCode === 403
     && loginCookie.startsWith("crm_session=")
