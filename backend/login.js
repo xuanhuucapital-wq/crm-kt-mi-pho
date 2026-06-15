@@ -14,36 +14,95 @@ const {
 const { jsonResponse } = require("./_sheets");
 const { parseJsonBody } = require("./_validation");
 
-const attempts = new Map();
+const failedAttempts = new Map();
+const loginBursts = new Map();
+const LOGIN_BURST_WINDOW_MS = 10 * 1000;
+const LOGIN_BURST_LIMIT = 3;
+const FAILED_LOGIN_WINDOW_MS = 5 * 60 * 1000;
+const FAILED_LOGIN_LIMIT = 5;
 
-function clientKey(event, email) {
+function clientIp(event) {
   const headers = event.headers || {};
-  const ip = String(headers["x-forwarded-for"] || headers["client-ip"] || "local").split(",")[0].trim();
-  return `${ip}|${email}`;
+  return String(
+    headers["cf-connecting-ip"]
+    || headers["x-forwarded-for"]
+    || headers["client-ip"]
+    || "local"
+  ).split(",")[0].trim();
 }
 
-function checkRateLimit(key) {
+function clientKey(event, email) {
+  return `${clientIp(event)}|${email}`;
+}
+
+function cleanupExpired(map, now) {
+  if (map.size <= 5000) return;
+  map.forEach((value, key) => {
+    if (value.resetAt <= now) map.delete(key);
+  });
+}
+
+function rateLimitError(message, retryAfter) {
+  const error = new Error(message);
+  error.statusCode = 429;
+  error.retryAfter = retryAfter;
+  return error;
+}
+
+function checkLoginBurst(event) {
   const now = Date.now();
-  const current = attempts.get(key);
+  cleanupExpired(loginBursts, now);
+  const key = clientIp(event);
+  const current = loginBursts.get(key);
   if (!current || current.resetAt <= now) {
-    attempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    loginBursts.set(key, { count: 1, resetAt: now + LOGIN_BURST_WINDOW_MS });
     return;
   }
   current.count += 1;
-  if (current.count > 8) {
-    const error = new Error("Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.");
-    error.statusCode = 429;
-    throw error;
+  if (current.count > LOGIN_BURST_LIMIT) {
+    throw rateLimitError(
+      "Bạn đăng nhập quá nhanh. Vui lòng chờ vài giây rồi thử lại.",
+      Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+    );
   }
 }
 
-function clearRateLimit(key) {
-  attempts.delete(key);
+function checkFailedLoginLimit(key) {
+  const now = Date.now();
+  cleanupExpired(failedAttempts, now);
+  const current = failedAttempts.get(key);
+  if (current && current.resetAt > now && current.count >= FAILED_LOGIN_LIMIT) {
+    throw rateLimitError(
+      "Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 5 phút.",
+      Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+    );
+  }
+}
+
+function recordFailedLogin(key) {
+  const now = Date.now();
+  const current = failedAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    failedAttempts.set(key, { count: 1, resetAt: now + FAILED_LOGIN_WINDOW_MS });
+    return;
+  }
+  current.count += 1;
+  if (current.count >= FAILED_LOGIN_LIMIT) {
+    throw rateLimitError(
+      "Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 5 phút.",
+      Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+    );
+  }
+}
+
+function clearFailedLoginLimit(key) {
+  failedAttempts.delete(key);
 }
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
   try {
+    checkLoginBurst(event);
     const payload = parseJsonBody(event);
     const email = normalizeEmail(payload.email);
     const password = String(payload.password || "");
@@ -51,11 +110,12 @@ exports.handler = async (event) => {
       return jsonResponse(400, { error: "Thông tin đăng nhập không hợp lệ." });
     }
     const key = clientKey(event, email);
-    checkRateLimit(key);
+    checkFailedLoginLimit(key);
 
     const database = await readDatabase();
     const user = (database.users || []).find((item) => normalizeText(item.email) === normalizeText(email));
     if (!user || !verifyPassword(password, user.passwordHash)) {
+      recordFailedLogin(key);
       const error = new Error("Email hoặc mật khẩu không đúng.");
       error.statusCode = 401;
       throw error;
@@ -85,7 +145,7 @@ exports.handler = async (event) => {
         summary: `${currentUser.displayName} đăng nhập hệ thống.`,
         details: {
           role: currentUser.role,
-          ip: clientKey(event, email).split("|")[0],
+          ip: clientIp(event),
           userAgent: String(event.headers?.["user-agent"] || event.headers?.["User-Agent"] || ""),
         },
       });
@@ -95,9 +155,13 @@ exports.handler = async (event) => {
     } else {
       await recordLogin();
     }
-    clearRateLimit(key);
+    clearFailedLoginLimit(key);
     return jsonResponse(200, result, { "set-cookie": sessionCookie(token) });
   } catch (error) {
-    return jsonResponse(error.statusCode || 400, { error: error.message });
+    return jsonResponse(
+      error.statusCode || 400,
+      { error: error.message },
+      error.retryAfter ? { "retry-after": String(error.retryAfter) } : {}
+    );
   }
 };

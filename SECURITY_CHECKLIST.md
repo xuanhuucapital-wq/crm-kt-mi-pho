@@ -1,6 +1,6 @@
 # Checklist bảo mật CRM
 
-Cập nhật: 2026-06-14.
+Cập nhật: 2026-06-15.
 
 ## Đã triển khai
 
@@ -13,7 +13,8 @@ Cập nhật: 2026-06-14.
 - Session 12 giờ dùng cookie `HttpOnly; Secure; SameSite=Strict`. Token cũ trong
   `localStorage` được dùng một lần để nâng cấp phiên rồi bị xóa.
 - Backend kiểm tra trạng thái user, role và phân hệ ở mọi API nghiệp vụ.
-- Login và toàn bộ API có rate limit theo IP. Login còn giới hạn theo IP + email.
+- Login và toàn bộ API có rate limit theo IP. Login có thêm chặn dồn dập
+  `3 lần / 10 giây`; đăng nhập sai `5 lần / 5 phút` bị khóa tạm theo IP + email.
 - Request thay đổi dữ liệu phải cùng origin, dùng JSON và không quá 64 KiB.
 - Input quan trọng có giới hạn độ dài, miền số và định dạng ngày.
 - Frontend escape dữ liệu trước khi đưa vào HTML; CSP chặn script ngoài.
@@ -40,6 +41,8 @@ Cập nhật: 2026-06-14.
 
 - Cloudflare Dashboard: bật WAF managed rules, Bot Fight Mode và rate limiting
   rules cho `/api/login` và `/api/register`.
+- CAPTCHA/Turnstile cho form đăng nhập nếu website mở public rộng rãi. Nên dùng
+  Cloudflare Turnstile hoặc reCAPTCHA thật, không dùng CAPTCHA tự chế ở frontend.
 - Supabase Dashboard: chạy migration mới, bật backup hằng ngày/PITR phù hợp gói,
   cấu hình budget alert và kiểm tra restore mỗi tháng.
 - Cloudflare: tạo budget/usage alert và email cảnh báo 50%, 80%, 100%.

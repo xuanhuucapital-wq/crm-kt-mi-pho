@@ -39,6 +39,19 @@ const securityHeaders = {
 
 const MAX_API_BODY_BYTES = 64 * 1024;
 const rateLimits = new Map();
+const apiRateLimitRules = {
+  "/api/login": [
+    { name: "burst", windowMs: 10 * 1000, limit: 3 },
+    { name: "sustained", windowMs: 15 * 60 * 1000, limit: 20 },
+  ],
+  "/api/register": [
+    { name: "burst", windowMs: 60 * 1000, limit: 5 },
+    { name: "sustained", windowMs: 15 * 60 * 1000, limit: 10 },
+  ],
+  default: [
+    { name: "sustained", windowMs: 60 * 1000, limit: 180 },
+  ],
+};
 
 function jsonError(statusCode, message, extraHeaders = {}) {
   return workerResponse({
@@ -64,18 +77,24 @@ function rateLimit(request, pathname) {
       if (value.resetAt <= now) rateLimits.delete(key);
     });
   }
-  const sensitive = pathname === "/api/login" || pathname === "/api/register";
-  const windowMs = sensitive ? 15 * 60 * 1000 : 60 * 1000;
-  const limit = pathname === "/api/login" ? 20 : pathname === "/api/register" ? 10 : 180;
-  const key = `${clientIp(request)}|${pathname}`;
-  const current = rateLimits.get(key);
-  if (!current || current.resetAt <= now) {
-    rateLimits.set(key, { count: 1, resetAt: now + windowMs });
-    return null;
+  const rules = apiRateLimitRules[pathname] || apiRateLimitRules.default;
+  let retryAfter = 0;
+  rules.forEach((rule) => {
+    const key = `${clientIp(request)}|${pathname}|${rule.name}`;
+    const current = rateLimits.get(key);
+    if (!current || current.resetAt <= now) {
+      rateLimits.set(key, { count: 1, resetAt: now + rule.windowMs });
+      return;
+    }
+    current.count += 1;
+    if (current.count > rule.limit) {
+      retryAfter = Math.max(retryAfter, Math.ceil((current.resetAt - now) / 1000));
+    }
+  });
+  if (retryAfter) {
+    return Math.max(1, retryAfter);
   }
-  current.count += 1;
-  if (current.count <= limit) return null;
-  return Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+  return null;
 }
 
 function validateApiRequest(request, url) {

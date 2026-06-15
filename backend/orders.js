@@ -4,8 +4,11 @@ const { jsonResponse } = require("./_sheets");
 const { boundedString, parseJsonBody } = require("./_validation");
 
 function numberValue(value) {
-  const raw = String(value ?? "").trim().replace(/\./g, "").replace(",", ".");
-  const parsed = Number(raw);
+  const raw = String(value ?? "").trim();
+  const normalized = /^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(raw)
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw.replace(",", ".");
+  const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1000000000) {
     const error = new Error("Giá trị số không hợp lệ.");
     error.statusCode = 400;
