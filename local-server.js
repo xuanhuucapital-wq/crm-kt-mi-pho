@@ -118,9 +118,9 @@ const server = http.createServer((req, res) => {
 });
 
 const port = Number(process.env.PORT || 8888);
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 const loopbackHosts = new Set(["127.0.0.1", "::1", "localhost"]);
-if (!loopbackHosts.has(host) && process.env.LOCAL_ALLOW_NETWORK !== "true") {
+if (!loopbackHosts.has(host) && process.env.NODE_ENV !== "production" && process.env.LOCAL_ALLOW_NETWORK !== "true") {
   throw new Error("Từ chối mở local server ra mạng LAN. Đặt LOCAL_ALLOW_NETWORK=true nếu thật sự cần.");
 }
 server.listen(port, host, () => {

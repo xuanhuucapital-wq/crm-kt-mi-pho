@@ -28,10 +28,10 @@ Google Sheets không còn được dùng để đọc, ghi hoặc đối chiếu
 
 ```bash
 export APP_AUTH_SECRET="$(openssl rand -hex 32)"
-PORT=8889 node local-server.js
+npm run local
 ```
 
-Mở `http://localhost:8889`.
+Mặc định local server mở tại `http://127.0.0.1:8888`. Có thể đổi cổng bằng `PORT=8889 npm run local`.
 
 Lần đầu, chọn **Đăng ký tài khoản giao hàng** và đăng ký email chủ doanh nghiệp. Khi chạy local, tài khoản đầu tiên sẽ trở thành `Quản lý`. Các tài khoản đăng ký sau mặc định là `Giao hàng / Chờ duyệt`.
 
@@ -58,6 +58,22 @@ NODE_ENV=production
 
 `SUPABASE_SECRET_KEY` chỉ được đặt trong secret của backend, tuyệt đối không
 đưa vào frontend hoặc GitHub.
+
+## Triển khai Node.js hosting
+
+Dự án có thể chạy bằng lệnh:
+
+```bash
+npm start
+```
+
+Lệnh này bind `0.0.0.0` để hosting có thể proxy request vào app. Trên hosting
+cần đặt các biến môi trường production ở phần trên, đặc biệt là `APP_AUTH_SECRET`
+và `SUPABASE_SECRET_KEY`.
+
+Khi nén ZIP để upload lên hosting như Tenten 1-Click Launch Website, cần nén
+nội dung bên trong thư mục dự án để `package.json` nằm ngay thư mục gốc của
+ZIP, không nằm trong một thư mục con.
 
 ## Triển khai Cloudflare
 

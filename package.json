@@ -1,5 +1,7 @@
 {
   "scripts": {
+    "start": "HOST=0.0.0.0 LOCAL_ALLOW_NETWORK=true node local-server.js",
+    "local": "node local-server.js",
     "dev": "wrangler dev",
     "build": "echo \"Static app ready\"",
     "deploy:cloudflare": "wrangler deploy",

@@ -15,7 +15,8 @@
 - Ghi audit log cho tạo/copy đơn và thay đổi quyền user.
 - Cloudflare Worker là backend nghiệp vụ và phục vụ toàn bộ route `/api/*`.
 - Đơn nợ mới không nhận trường `paid` từ frontend; thu tiền chỉ đi qua API thanh toán.
-- Local server chỉ bind `127.0.0.1`; mở ra LAN phải bật rõ `LOCAL_ALLOW_NETWORK=true`.
+- `npm run local` chỉ bind `127.0.0.1`; `npm start` bind `0.0.0.0` để phù hợp
+  Node.js hosting.
 
 ## Bắt buộc trước khi public internet
 

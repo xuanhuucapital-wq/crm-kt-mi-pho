@@ -1169,11 +1169,13 @@ function renderProductionStats() {
       orders: 0,
       customers: new Set(),
       totalKg: 0,
+      revenue: 0,
       quantities: Object.fromEntries(products.map((product) => [product.quantity, 0])),
     };
     current.orders += 1;
     current.customers.add(normalizeVietnamese(order.customerName));
     current.totalKg += orderKg;
+    current.revenue += Number(order.subtotal || 0);
     products.forEach((product) => {
       current.quantities[product.quantity] += quantities[product.quantity];
     });
@@ -1183,6 +1185,7 @@ function renderProductionStats() {
   const rows = [...grouped.values()].sort((first, second) => second.date.localeCompare(first.date));
   const totals = rows.reduce((result, row) => {
     result.totalKg += row.totalKg;
+    result.revenue += row.revenue;
     result.orders += row.orders;
     products.forEach((product) => {
       result.quantities[product.quantity] += row.quantities[product.quantity];
@@ -1190,6 +1193,7 @@ function renderProductionStats() {
     return result;
   }, {
     totalKg: 0,
+    revenue: 0,
     orders: 0,
     quantities: Object.fromEntries(products.map((product) => [product.quantity, 0])),
   });
@@ -1218,6 +1222,7 @@ function renderProductionStats() {
       `${number.format(totals.quantities[product.quantity])} kg`,
       "Theo đơn hàng đã ghi nhận",
     ]),
+    ["Doanh thu", money.format(totals.revenue), "Tiền hàng theo ngày giao"],
     ["Trung bình/ngày", `${number.format(averagePerDay)} kg`, "Tính trên ngày có sản lượng"],
     ["Số đơn", number.format(totals.orders), "Không tính đơn khách nghỉ"],
   ].map(([label, value, note]) => `<div><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("");
@@ -1234,10 +1239,11 @@ function renderProductionStats() {
       <td><strong>${formatDate(row.date)}</strong></td>
       ${productCells}
       <td><strong class="daily-total">${number.format(row.totalKg)}</strong></td>
+      <td><strong>${money.format(row.revenue)}</strong></td>
       <td>${number.format(row.orders)}</td>
       <td>${number.format(row.customers.size)}</td>
     </tr>`;
-  }).join("") || '<tr><td colspan="8" class="empty-row">Không có sản lượng trong khoảng ngày đã chọn.</td></tr>';
+  }).join("") || '<tr><td colspan="9" class="empty-row">Không có sản lượng trong khoảng ngày đã chọn.</td></tr>';
 }
 
 function resetReportToLast30Days() {
