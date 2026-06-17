@@ -1150,7 +1150,24 @@ function resetProductionStatsToLast30Days() {
   renderProductionStats();
 }
 
+function syncProductionStatsTableHeader() {
+  const table = $(".production-stats-table");
+  if (!table) return;
+  table.querySelector("thead").innerHTML = `
+    <tr>
+      <th>Thứ</th>
+      <th>Ngày</th>
+      <th id="productionStatsProductHeader1">Mì</th>
+      <th id="productionStatsProductHeader2">Da cảo</th>
+      <th id="productionStatsProductHeader3">Da hoành</th>
+      <th>Tổng kg</th>
+      <th>Doanh thu</th>
+      <th>Số đơn</th>
+    </tr>`;
+}
+
 function renderProductionStats() {
+  syncProductionStatsTableHeader();
   const products = productionStatsProducts();
   const from = $("#productionStatsFrom").value;
   const to = $("#productionStatsTo").value;
