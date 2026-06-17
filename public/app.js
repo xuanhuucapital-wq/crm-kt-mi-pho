@@ -1167,13 +1167,11 @@ function renderProductionStats() {
     const current = grouped.get(order.date) || {
       date: order.date,
       orders: 0,
-      customers: new Set(),
       totalKg: 0,
       revenue: 0,
       quantities: Object.fromEntries(products.map((product) => [product.quantity, 0])),
     };
     current.orders += 1;
-    current.customers.add(normalizeVietnamese(order.customerName));
     current.totalKg += orderKg;
     current.revenue += Number(order.subtotal || 0);
     products.forEach((product) => {
@@ -1241,9 +1239,8 @@ function renderProductionStats() {
       <td><strong class="daily-total">${number.format(row.totalKg)}</strong></td>
       <td><strong>${money.format(row.revenue)}</strong></td>
       <td>${number.format(row.orders)}</td>
-      <td>${number.format(row.customers.size)}</td>
     </tr>`;
-  }).join("") || '<tr><td colspan="9" class="empty-row">Không có sản lượng trong khoảng ngày đã chọn.</td></tr>';
+  }).join("") || '<tr><td colspan="8" class="empty-row">Không có sản lượng trong khoảng ngày đã chọn.</td></tr>';
 }
 
 function resetReportToLast30Days() {
