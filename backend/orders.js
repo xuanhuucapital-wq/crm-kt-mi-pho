@@ -190,6 +190,19 @@ exports.handler = async (event) => {
             createdByUserId: sessionUser.id,
             createdByEmail: sessionUser.email,
           };
+          if (payload.useCustomerPrices) {
+            const customer = database.crm.customers.find((item) => (
+              normalizeBusinessUnit(item.businessUnit) === businessUnit
+              && normalizeText(item.TenKH) === normalizeText(source.customerName)
+            ));
+            if (customer) {
+              created.priceMi = Number(customer.GiaMi || 0);
+              created.priceCao = Number(customer.GiaCao || 0);
+              created.priceHoanh = Number(customer.GiaHoanh || 0);
+              created.pricePhoSoi = Number(customer.GiaPhoSoi || 0);
+              created.pricePhoCuon = Number(customer.GiaPhoCuon || 0);
+            }
+          }
           applyPayload(created, {
             ...payload,
             orderDate: payload.orderDate || todayInVietnam(),

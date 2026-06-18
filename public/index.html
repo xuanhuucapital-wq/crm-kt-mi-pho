@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#17352f" />
     <title>CRM Nhà Xưởng</title>
-    <link rel="stylesheet" href="/styles.css?v=20260617-1845" />
+    <link rel="stylesheet" href="/styles.css?v=20260618-0930" />
     <link rel="stylesheet" href="/audit.css?v=20260617-1845" />
   </head>
   <body>
@@ -92,7 +92,7 @@
         </section>
 
         <section id="ordersView" class="view">
-          <div class="page-head"><div><p class="eyebrow">Bán hàng</p><h1>Tạo đơn mới</h1></div><span id="syncStatus" class="sync-status">Database CRM</span></div>
+          <div class="page-head"><div><p class="eyebrow">Bán hàng</p><h1>Tạo đơn mới</h1></div><div class="page-actions"><button id="copyProductionButton" class="secondary-button" type="button">Copy sản lượng</button><span id="syncStatus" class="sync-status">Database CRM</span></div></div>
           <form id="orderForm" class="order-layout">
             <section class="surface form-surface">
               <div class="section-head"><div><h2>Thông tin đơn</h2><p>Giá bán được lấy theo từng khách hàng</p></div></div>
@@ -443,6 +443,28 @@
       </form>
     </dialog>
 
+    <dialog id="bulkCopyDialog" class="profile-dialog bulk-copy-dialog">
+      <form id="bulkCopyForm" class="profile-shell">
+        <div class="section-head">
+          <div><p class="eyebrow">Copy sản lượng</p><h2>Chọn nhiều khách hàng</h2><p id="bulkCopySubtitle"></p></div>
+          <button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button>
+        </div>
+        <section class="bulk-copy-toolbar">
+          <label>Lấy sản lượng từ ngày<input id="bulkCopySourceDate" type="date" required /></label>
+          <label>Tạo đơn cho ngày<input id="bulkCopyTargetDate" type="date" required /></label>
+          <button id="bulkCopySelectAll" class="secondary-button" type="button">Chọn tất cả</button>
+        </section>
+        <div class="table-wrap bulk-copy-table-wrap">
+          <table class="bulk-copy-table">
+            <thead id="bulkCopyHead"></thead>
+            <tbody id="bulkCopyRows"></tbody>
+          </table>
+        </div>
+        <div id="bulkCopyResult" class="notice"></div>
+        <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button id="saveBulkCopy" class="primary" type="submit">Tạo đơn đã chọn</button></div>
+      </form>
+    </dialog>
+
     <button id="aiChatButton" class="ai-chat-button hidden" type="button" aria-label="Mở Chat AI">
       <span>✦</span><strong>Chat AI</strong>
     </button>
@@ -462,6 +484,6 @@
         <button class="primary" type="submit" aria-label="Phân tích câu lệnh">➤</button>
       </form>
     </aside>
-    <script src="/app.js?v=20260617-1845"></script>
+    <script src="/app.js?v=20260618-0930"></script>
   </body>
 </html>

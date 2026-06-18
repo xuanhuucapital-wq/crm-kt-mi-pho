@@ -381,6 +381,7 @@ function renderAuth() {
   $("#userAvatar").textContent = (state.user.displayName || state.user.email || "A").slice(0, 1).toUpperCase();
   $("#userEmail").value = state.user.email;
   $("#addCustomerButton").classList.toggle("hidden", !isManager);
+  $("#copyProductionButton").classList.toggle("hidden", !isManager);
   $("#addProductionInfo").classList.toggle("hidden", !isManager);
   $("#syncProductionCustomers").classList.toggle("hidden", !isManager);
   $$(".nav-item").forEach((button) => {
@@ -990,6 +991,168 @@ function editOrderPrices(order) {
     product.key,
     order[product.orderPrice] || customer?.[product.price] || 0,
   ]));
+}
+
+function ordersForBulkCopy(sourceDate) {
+  const rows = new Map();
+  state.orders
+    .filter((order) => order.date === sourceDate)
+    .sort(newestOrderFirst)
+    .forEach((order) => {
+      const key = normalizeVietnamese(order.customerName.trim());
+      if (!key || rows.has(key)) return;
+      rows.set(key, order);
+    });
+  return [...rows.values()].sort((first, second) => compareCustomerNames(first.customerName, second.customerName));
+}
+
+function latestOrderDateBefore(dateValue) {
+  return state.orders
+    .map((order) => order.date)
+    .filter((date) => date && date < dateValue)
+    .sort()
+    .at(-1) || dateDaysBefore(dateValue, 1);
+}
+
+function duplicateOrderOnDate(order, targetDate) {
+  const key = normalizeVietnamese(order.customerName.trim());
+  return state.orders.some((item) => (
+    item.date === targetDate
+    && normalizeVietnamese(item.customerName.trim()) === key
+  ));
+}
+
+function bulkCopyInputValue(order, product) {
+  if (product.key === "phoSoi" && order.phoSoiUnit === "cay") {
+    return order.phoSoiInputQuantity || Number(order.phoSoiKg || 0) / 5 || "";
+  }
+  return order[product.quantity] || "";
+}
+
+function renderBulkCopyRows() {
+  const sourceDate = $("#bulkCopySourceDate").value;
+  const targetDate = $("#bulkCopyTargetDate").value;
+  const products = currentUnit().products;
+  const rows = ordersForBulkCopy(sourceDate);
+  $("#bulkCopyHead").innerHTML = `
+    <tr>
+      <th><input id="bulkCopyMasterCheck" type="checkbox" aria-label="Chọn tất cả khách" ${rows.length ? "checked" : ""} /></th>
+      <th>Khách hàng</th>
+      ${products.map((product) => `<th>${escapeHtml(product.name)}</th>`).join("")}
+      <th>Nhà xe</th>
+      <th>Trạng thái</th>
+    </tr>`;
+  $("#bulkCopyRows").innerHTML = rows.map((order) => {
+    const duplicate = duplicateOrderOnDate(order, targetDate);
+    const cells = products.map((product) => {
+      const unitSelector = product.key === "phoSoi"
+        ? `<select data-field="phoSoiUnit" aria-label="Đơn vị phở sợi"><option value="kg" ${order.phoSoiUnit !== "cay" ? "selected" : ""}>kg</option><option value="cay" ${order.phoSoiUnit === "cay" ? "selected" : ""}>cây</option></select>`
+        : "<span>kg</span>";
+      return `<td><label class="bulk-copy-quantity"><input data-field="${escapeHtml(product.quantity)}" inputmode="decimal" value="${escapeHtml(bulkCopyInputValue(order, product))}" /><small>${unitSelector}</small></label></td>`;
+    }).join("");
+    return `
+      <tr data-source-id="${order.id}">
+        <td><input class="bulk-copy-check" type="checkbox" ${duplicate ? "" : "checked"} aria-label="Chọn ${escapeHtml(order.customerName)}" /></td>
+        <td><strong>${escapeHtml(order.customerName)}</strong><small class="block">Mẫu #${order.id} · ${formatDate(order.date)}</small></td>
+        ${cells}
+        <td>${escapeHtml(order.truck || "—")}</td>
+        <td>${duplicate ? '<span class="status watch">Đã có đơn ngày này</span>' : '<span class="status ok">Sẵn sàng</span>'}</td>
+      </tr>`;
+  }).join("") || `<tr><td colspan="${4 + products.length}" class="empty-row">Không có đơn hàng trong ngày này để copy.</td></tr>`;
+  $("#bulkCopySubtitle").textContent = rows.length
+    ? `Tìm thấy ${number.format(rows.length)} khách từ ngày ${formatDate(sourceDate)}. Giá và thông tin đơn sẽ lấy theo đơn mẫu.`
+    : `Không có đơn trong ngày ${formatDate(sourceDate)}. Hãy chọn ngày khác.`;
+  updateBulkCopySelection();
+}
+
+function updateBulkCopySelection() {
+  const checks = $$(".bulk-copy-check");
+  const selected = checks.filter((input) => input.checked).length;
+  const master = $("#bulkCopyMasterCheck");
+  if (master) {
+    master.checked = checks.length > 0 && selected === checks.length;
+    master.indeterminate = selected > 0 && selected < checks.length;
+  }
+  $("#saveBulkCopy").disabled = selected === 0;
+  $("#saveBulkCopy").textContent = selected ? `Tạo ${number.format(selected)} đơn đã chọn` : "Chọn khách để tạo đơn";
+}
+
+function openBulkCopyDialog() {
+  const today = todayInVietnam();
+  $("#bulkCopyTargetDate").value = today;
+  $("#bulkCopySourceDate").value = latestOrderDateBefore(today);
+  $("#bulkCopyResult").className = "notice";
+  renderBulkCopyRows();
+  $("#bulkCopyDialog").showModal();
+}
+
+function bulkCopyPayloadFromRow(row) {
+  const source = state.orders.find((order) => Number(order.id) === Number(row.dataset.sourceId));
+  if (!source) throw new Error("Không tìm thấy đơn mẫu.");
+  const valueFor = (field, fallback = "") => row.querySelector(`[data-field="${field}"]`)?.value ?? fallback;
+  const payload = {
+    action: "copy",
+    sourceOrderId: source.id,
+    useCustomerPrices: true,
+    businessUnit: state.businessUnit,
+    orderDate: $("#bulkCopyTargetDate").value,
+    nhaXe: source.truck || "",
+    extraShipCustomer: source.extraShipCustomer || "",
+    tienUng: source.advance || "",
+    taxRate: source.taxRate || 0,
+    taxPayer: source.taxPayer || "customer",
+    customerResting: source.customerResting,
+    ghiChu: source.note || "",
+    paymentMethod: "debt",
+    paid: 0,
+    miKg: source.miKg || 0,
+    caoKg: source.caoKg || 0,
+    hoanhKg: source.hoanhKg || 0,
+    huTieu: source.huTieu || 0,
+    voBanhGoi: source.voBanhGoi || 0,
+    thungXop: source.thungXop || 0,
+    phoSoiKg: source.phoSoiUnit === "cay" ? (source.phoSoiInputQuantity || Number(source.phoSoiKg || 0) / 5) : (source.phoSoiKg || 0),
+    phoSoiUnit: source.phoSoiUnit || "kg",
+    phoCuonKg: source.phoCuonKg || 0,
+  };
+  currentUnit().products.forEach((product) => {
+    payload[product.quantity] = valueFor(product.quantity, payload[product.quantity]);
+  });
+  if (state.businessUnit === "pho") payload.phoSoiUnit = valueFor("phoSoiUnit", payload.phoSoiUnit);
+  return payload;
+}
+
+async function saveBulkCopiedOrders(button) {
+  const selectedRows = $$(".bulk-copy-check:checked").map((input) => input.closest("tr"));
+  if (!selectedRows.length) return;
+  button.disabled = true;
+  notice($("#bulkCopyResult"), `Đang tạo ${number.format(selectedRows.length)} đơn...`);
+  const errors = [];
+  let created = 0;
+  for (const row of selectedRows) {
+    const source = state.orders.find((order) => Number(order.id) === Number(row.dataset.sourceId));
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: authHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify(bulkCopyPayloadFromRow(row)),
+      });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || "Không tạo được đơn.");
+      created += 1;
+    } catch (error) {
+      errors.push(`${source?.customerName || `Đơn #${row.dataset.sourceId}`}: ${error.message}`);
+    }
+  }
+  await loadCrm();
+  if (errors.length) {
+    notice($("#bulkCopyResult"), `Đã tạo ${number.format(created)} đơn, ${number.format(errors.length)} đơn lỗi: ${errors.join("; ")}`, "error");
+    button.disabled = false;
+    updateBulkCopySelection();
+    return;
+  }
+  notice($("#result"), `Đã copy sản lượng và tạo ${number.format(created)} đơn cho ngày ${formatDate($("#bulkCopyTargetDate").value)}.`);
+  $("#bulkCopyDialog").close();
 }
 
 function calculateEditOrder() {
@@ -2003,6 +2166,26 @@ $("#truckSuggestions").addEventListener("click", (event) => {
     : "";
   renderTruckSuggestions();
   calculateOrder();
+});
+$("#copyProductionButton").addEventListener("click", openBulkCopyDialog);
+$("#bulkCopySourceDate").addEventListener("change", renderBulkCopyRows);
+$("#bulkCopyTargetDate").addEventListener("change", renderBulkCopyRows);
+$("#bulkCopySelectAll").addEventListener("click", () => {
+  const checks = $$(".bulk-copy-check");
+  const shouldCheck = checks.some((input) => !input.checked);
+  checks.forEach((input) => { input.checked = shouldCheck; });
+  updateBulkCopySelection();
+});
+$("#bulkCopyRows").addEventListener("input", updateBulkCopySelection);
+$("#bulkCopyRows").addEventListener("change", updateBulkCopySelection);
+$("#bulkCopyHead").addEventListener("change", (event) => {
+  if (!event.target.matches("#bulkCopyMasterCheck")) return;
+  $$(".bulk-copy-check").forEach((input) => { input.checked = event.target.checked; });
+  updateBulkCopySelection();
+});
+$("#bulkCopyForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await saveBulkCopiedOrders($("#saveBulkCopy"));
 });
 $("#orderForm").addEventListener("submit", async (event) => {
   event.preventDefault();
