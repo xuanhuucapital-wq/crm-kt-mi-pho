@@ -224,6 +224,70 @@ function applyBusinessUnitUi() {
   $("#aiChatButton").classList.toggle("hidden", state.businessUnit === "pho" || state.user?.role !== "manager");
 }
 
+function ensureBulkCopyUi() {
+  if (!$("#copyProductionButton")) {
+    const orderHead = $("#ordersView .page-head");
+    const syncStatus = $("#syncStatus");
+    if (orderHead && syncStatus) {
+      let actions = orderHead.querySelector(".page-actions");
+      if (!actions) {
+        actions = document.createElement("div");
+        actions.className = "page-actions";
+        orderHead.appendChild(actions);
+        actions.appendChild(syncStatus);
+      }
+      actions.insertAdjacentHTML("afterbegin", '<button id="copyProductionButton" class="secondary-button" type="button">Copy sản lượng</button>');
+    }
+  }
+  if (!$("#bulkCopyDialog")) {
+    document.body.insertAdjacentHTML("beforeend", `
+      <dialog id="bulkCopyDialog" class="profile-dialog bulk-copy-dialog">
+        <form id="bulkCopyForm" class="profile-shell">
+          <div class="section-head">
+            <div><p class="eyebrow">Copy sản lượng</p><h2>Chọn nhiều khách hàng</h2><p id="bulkCopySubtitle"></p></div>
+            <button class="icon-button dialog-close" type="button" aria-label="Đóng">×</button>
+          </div>
+          <section class="bulk-copy-toolbar">
+            <label>Lấy sản lượng từ ngày<input id="bulkCopySourceDate" type="date" required /></label>
+            <label>Tạo đơn cho ngày<input id="bulkCopyTargetDate" type="date" required /></label>
+            <button id="bulkCopySelectAll" class="secondary-button" type="button">Chọn tất cả</button>
+          </section>
+          <div class="table-wrap bulk-copy-table-wrap">
+            <table class="bulk-copy-table">
+              <thead id="bulkCopyHead"></thead>
+              <tbody id="bulkCopyRows"></tbody>
+            </table>
+          </div>
+          <div id="bulkCopyResult" class="notice"></div>
+          <div class="dialog-actions"><button class="dialog-close" type="button">Hủy</button><button id="saveBulkCopy" class="primary" type="submit">Tạo đơn đã chọn</button></div>
+        </form>
+      </dialog>
+    `);
+  }
+  if (!$("#bulkCopyRuntimeStyles")) {
+    document.head.insertAdjacentHTML("beforeend", `
+      <style id="bulkCopyRuntimeStyles">
+        .bulk-copy-dialog{width:min(1120px,calc(100% - 24px))}
+        .bulk-copy-toolbar{display:grid;grid-template-columns:repeat(2,minmax(180px,240px)) auto;gap:12px;align-items:end;padding:16px 20px;border-bottom:1px solid var(--line)}
+        .bulk-copy-toolbar button{height:42px}
+        .bulk-copy-table-wrap{max-height:min(58vh,560px);border-bottom:1px solid var(--line)}
+        .bulk-copy-table{min-width:860px}
+        .bulk-copy-table th:first-child,.bulk-copy-table td:first-child{width:44px;text-align:center}
+        .bulk-copy-table input[type="checkbox"]{width:18px;height:18px}
+        .bulk-copy-table td{vertical-align:middle}
+        .bulk-copy-quantity{display:grid;grid-template-columns:minmax(82px,1fr) auto;align-items:center;gap:6px;min-width:132px}
+        .bulk-copy-quantity input{height:38px;padding:8px 9px}
+        .bulk-copy-quantity small{display:flex;align-items:center;color:var(--muted);font-weight:600}
+        .bulk-copy-quantity select{width:64px;height:38px;padding:6px 5px}
+        .bulk-copy-quantity span{display:inline-grid;place-items:center;min-width:24px}
+        .bulk-copy-dialog .dialog-actions{padding-top:14px}
+        .bulk-copy-dialog .notice.show{margin-left:20px;margin-right:20px}
+        @media(max-width:760px){.bulk-copy-dialog{width:100vw;height:100vh;max-height:none;border-radius:0}.bulk-copy-dialog .profile-shell{max-height:100vh;height:100vh}.bulk-copy-toolbar{grid-template-columns:1fr 1fr;padding:14px}.bulk-copy-toolbar button{grid-column:1/-1}.bulk-copy-table-wrap{max-height:none;min-height:0}.bulk-copy-table{min-width:720px}}
+      </style>
+    `);
+  }
+}
+
 async function switchBusinessUnit(businessUnit) {
   if (!businessUnits[businessUnit] || !(state.user?.businessUnits || ["mi", "pho"]).includes(businessUnit)) return;
   state.businessUnit = businessUnit;
@@ -2167,6 +2231,7 @@ $("#truckSuggestions").addEventListener("click", (event) => {
   renderTruckSuggestions();
   calculateOrder();
 });
+ensureBulkCopyUi();
 if ($("#copyProductionButton") && $("#bulkCopyForm")) {
   $("#copyProductionButton").addEventListener("click", openBulkCopyDialog);
   $("#bulkCopySourceDate").addEventListener("change", renderBulkCopyRows);
