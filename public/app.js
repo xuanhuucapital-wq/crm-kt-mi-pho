@@ -381,7 +381,7 @@ function renderAuth() {
   $("#userAvatar").textContent = (state.user.displayName || state.user.email || "A").slice(0, 1).toUpperCase();
   $("#userEmail").value = state.user.email;
   $("#addCustomerButton").classList.toggle("hidden", !isManager);
-  $("#copyProductionButton").classList.toggle("hidden", !isManager);
+  $("#copyProductionButton")?.classList.toggle("hidden", !isManager);
   $("#addProductionInfo").classList.toggle("hidden", !isManager);
   $("#syncProductionCustomers").classList.toggle("hidden", !isManager);
   $$(".nav-item").forEach((button) => {
@@ -2167,26 +2167,28 @@ $("#truckSuggestions").addEventListener("click", (event) => {
   renderTruckSuggestions();
   calculateOrder();
 });
-$("#copyProductionButton").addEventListener("click", openBulkCopyDialog);
-$("#bulkCopySourceDate").addEventListener("change", renderBulkCopyRows);
-$("#bulkCopyTargetDate").addEventListener("change", renderBulkCopyRows);
-$("#bulkCopySelectAll").addEventListener("click", () => {
-  const checks = $$(".bulk-copy-check");
-  const shouldCheck = checks.some((input) => !input.checked);
-  checks.forEach((input) => { input.checked = shouldCheck; });
-  updateBulkCopySelection();
-});
-$("#bulkCopyRows").addEventListener("input", updateBulkCopySelection);
-$("#bulkCopyRows").addEventListener("change", updateBulkCopySelection);
-$("#bulkCopyHead").addEventListener("change", (event) => {
-  if (!event.target.matches("#bulkCopyMasterCheck")) return;
-  $$(".bulk-copy-check").forEach((input) => { input.checked = event.target.checked; });
-  updateBulkCopySelection();
-});
-$("#bulkCopyForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  await saveBulkCopiedOrders($("#saveBulkCopy"));
-});
+if ($("#copyProductionButton") && $("#bulkCopyForm")) {
+  $("#copyProductionButton").addEventListener("click", openBulkCopyDialog);
+  $("#bulkCopySourceDate").addEventListener("change", renderBulkCopyRows);
+  $("#bulkCopyTargetDate").addEventListener("change", renderBulkCopyRows);
+  $("#bulkCopySelectAll").addEventListener("click", () => {
+    const checks = $$(".bulk-copy-check");
+    const shouldCheck = checks.some((input) => !input.checked);
+    checks.forEach((input) => { input.checked = shouldCheck; });
+    updateBulkCopySelection();
+  });
+  $("#bulkCopyRows").addEventListener("input", updateBulkCopySelection);
+  $("#bulkCopyRows").addEventListener("change", updateBulkCopySelection);
+  $("#bulkCopyHead").addEventListener("change", (event) => {
+    if (!event.target.matches("#bulkCopyMasterCheck")) return;
+    $$(".bulk-copy-check").forEach((input) => { input.checked = event.target.checked; });
+    updateBulkCopySelection();
+  });
+  $("#bulkCopyForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await saveBulkCopiedOrders($("#saveBulkCopy"));
+  });
+}
 $("#orderForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
