@@ -1,7 +1,15 @@
-const ExcelJS = require("exceljs");
 const { authErrorResponse, requireBusinessUnit, requireRole } = require("./_auth");
 const { normalizeBusinessUnit, readDatabase, recalculate } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+
+function loadExcelJs() {
+  if (process.env.CRM_DISABLE_EXCELJS_EXPORT === "true") return null;
+  try {
+    return require("exceljs");
+  } catch {
+    return null;
+  }
+}
 
 const colors = {
   dark: "17352F",
@@ -83,6 +91,119 @@ function exportDate() {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function xlsDate(value) {
+  const date = asDate(value);
+  return date ? date.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "";
+}
+
+function htmlTable(headers, rows) {
+  return `
+    <table>
+      <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>`;
+}
+
+function fallbackDebtWorkbook({ businessUnit, unitName, customers, outstandingOrders, payments }) {
+  const date = exportDate();
+  const totalDebt = customers.reduce((sum, customer) => sum + Number(customer.debt || 0), 0);
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body{font-family:Arial,sans-serif}
+    h1{font-size:18pt;color:#17352f}
+    h2{font-size:13pt;color:#246b59;margin-top:22px}
+    table{border-collapse:collapse;margin-bottom:18px}
+    th{background:#246b59;color:#fff;font-weight:bold}
+    th,td{border:1px solid #dfe5e2;padding:6px 8px;vertical-align:top}
+    .money{text-align:right}
+  </style>
+</head>
+<body>
+  <h1>Báo cáo công nợ ${escapeHtml(unitName)}</h1>
+  <p>Xuất từ database CRM lúc ${escapeHtml(new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }))}</p>
+  ${htmlTable(["Tổng phải thu", "Khách còn nợ"], [[totalDebt, customers.length]])}
+  <h2>Tổng hợp công nợ</h2>
+  ${htmlTable(
+    ["STT", "Mã khách", "Khách hàng", "Số giao dịch", "Tiền hàng", "Đã thu", "Còn nợ", "Giao dịch cuối", "Mức độ"],
+    customers.map((customer, index) => [
+      index + 1,
+      customer.MaKH,
+      customer.TenKH,
+      customer.orderCount,
+      Number(customer.revenue || 0),
+      Number(customer.paid || 0),
+      Number(customer.debt || 0),
+      xlsDate(customer.lastOrderDate),
+      debtLevel(Number(customer.debt || 0)),
+    ]),
+  )}
+  <h2>${businessUnit === "pho" ? "Công nợ phở" : "Bảng công nợ chi tiết"}</h2>
+  ${htmlTable(
+    businessUnit === "pho"
+      ? ["Thứ", "Ngày tháng năm", "Tên quán", "Số lượng (kg)", "Tiền hàng", "Đã thu", "Còn nợ"]
+      : ["Ngày", "Mã đơn", "Tên KH", "Mì kg", "Cảo kg", "Hoành kg", "Tiền hàng", "Đã thu", "Còn nợ", "Nhà xe", "Ghi chú"],
+    outstandingOrders.map((order) => (
+      businessUnit === "pho"
+        ? [
+          weekday(order.date),
+          xlsDate(order.date),
+          order.customerName,
+          Number(order.phoSoiKg || 0) + Number(order.phoCuonKg || 0),
+          Number(order.subtotal || 0),
+          Number(order.paid || 0),
+          Number(order.debt || 0),
+        ]
+        : [
+          xlsDate(order.date),
+          order.id,
+          order.customerName,
+          Number(order.miKg || 0),
+          Number(order.caoKg || 0),
+          Number(order.hoanhKg || 0),
+          Number(order.subtotal || 0),
+          Number(order.paid || 0),
+          Number(order.debt || 0),
+          order.truck || "",
+          order.note || "",
+        ]
+    )),
+  )}
+  <h2>Lịch sử thanh toán</h2>
+  ${htmlTable(
+    ["Ngày", "Mã khách", "Khách hàng", "Số tiền", "Ghi chú", "Giao dịch được phân bổ"],
+    payments.map((payment) => [
+      xlsDate(payment.date),
+      payment.customerCode,
+      payment.customerName,
+      Number(payment.amount || 0),
+      payment.note || "",
+      (payment.allocations || []).map((item) => `#${item.orderId}: ${Number(item.amount || 0).toLocaleString("vi-VN")} đ`).join("; "),
+    ]),
+  )}
+</body>
+</html>`;
+  return {
+    statusCode: 200,
+    headers: {
+      "content-type": "application/vnd.ms-excel; charset=utf-8",
+      "content-disposition": `attachment; filename="cong-no-${businessUnit}-${date}.xls"`,
+      "cache-control": "no-store",
+    },
+    body: html,
+  };
+}
+
 async function phoDebtWorkbook(workbook, outstandingOrders) {
   const sheet = workbook.addWorksheet("Công nợ phở", {
     views: [{ state: "frozen", ySplit: 1 }],
@@ -161,6 +282,10 @@ exports.handler = async (event) => {
     const payments = (database.payments || []).filter((payment) => (
       normalizeBusinessUnit(payment.businessUnit) === businessUnit
     ));
+    const ExcelJS = loadExcelJs();
+    if (!ExcelJS) {
+      return fallbackDebtWorkbook({ businessUnit, unitName, customers, outstandingOrders, payments });
+    }
     const workbook = new ExcelJS.Workbook();
     workbook.creator = `CRM ${unitName}`;
     workbook.created = new Date();
