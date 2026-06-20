@@ -1,6 +1,7 @@
 const { authErrorResponse, requireBusinessUnit, requireRole } = require("./_auth");
 const { normalizeBusinessUnit, normalizeText, readDatabase, recalculate } = require("./_database");
 const { jsonResponse } = require("./_sheets");
+const exportCustomerSheet = require("./export-customer-sheet");
 
 const productColumns = {
   mi: [
@@ -380,6 +381,9 @@ async function excelWorkbook({ businessUnit, unitName, customer, orders, payment
 }
 
 exports.handler = async (event) => {
+  if (["google-sheet", "sheet"].includes(String(event.queryStringParameters?.format || "").toLowerCase())) {
+    return exportCustomerSheet.handler(event);
+  }
   if (event.httpMethod !== "GET") return jsonResponse(405, { error: "Method not allowed" });
   try {
     const manager = await requireRole(event, "manager");

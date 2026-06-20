@@ -1270,7 +1270,7 @@ async function exportCustomerProfileSheet(button) {
   button.disabled = true;
   button.textContent = "Đang đồng bộ...";
   try {
-    const response = await fetch(unitUrl(`/api/export-customer-sheet?customerCode=${encodeURIComponent(code)}`), {
+    const response = await fetch(unitUrl(`/api/export-customer?customerCode=${encodeURIComponent(code)}&format=google-sheet`), {
       method: "POST",
       headers: authHeaders({ "content-type": "application/json" }),
       body: "{}",
