@@ -1039,6 +1039,103 @@ function ensureProfileExportButton() {
   return button;
 }
 
+function excelHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function excelFilename(value) {
+  return normalizeVietnamese(value || "khach-hang")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "khach-hang";
+}
+
+function excelTable(headers, rows) {
+  return `<table><thead><tr>${headers.map((header) => `<th>${excelHtml(header)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => (
+    `<tr>${row.map((cell) => `<td>${excelHtml(cell)}</td>`).join("")}</tr>`
+  )).join("")}</tbody></table>`;
+}
+
+function exportCustomerProfileBrowserXls(code) {
+  const knownCustomer = state.customers.find((item) => item.MaKH === code);
+  const customerName = knownCustomer?.TenKH || state.profileCustomerName;
+  if (!customerName) throw new Error("Không tìm thấy dữ liệu khách hàng để xuất.");
+  const products = currentUnit().products;
+  const orders = state.orders
+    .filter((order) => normalizeVietnamese(order.customerName.trim()) === normalizeVietnamese(customerName.trim()))
+    .sort(newestOrderFirst);
+  const payments = paymentHistory().filter((payment) => payment.customerCode === code);
+  const totals = orders.reduce((result, order) => ({
+    subtotal: result.subtotal + Number(order.subtotal || 0),
+    tax: result.tax + Number(order.taxAmount || 0),
+    advance: result.advance + Number(order.advance || 0),
+    paid: result.paid + Number(order.paid || 0),
+    debt: result.debt + Number(order.debt || 0),
+  }), { subtotal: 0, tax: 0, advance: 0, paid: 0, debt: 0 });
+  const detailHeaders = [
+    "Ngày",
+    "Mã đơn",
+    ...products.flatMap((product) => [`${product.name} - SL kg`, `${product.name} - Đơn giá`, `${product.name} - Thành tiền`]),
+    "Tiền hàng",
+    "Thuế",
+    "Ứng xe",
+    "Đã trả",
+    "Còn lại",
+    "Nhà xe",
+    "Khách phụ ship",
+    "Khách nghỉ",
+    "Ghi chú",
+  ];
+  const detailRows = orders.map((order) => [
+    formatDate(order.date),
+    Number(order.id || 0),
+    ...products.flatMap((product) => {
+      const quantity = Number(order[product.quantity] || 0);
+      const price = Number(order[product.orderPrice] || 0);
+      return [quantity, price, quantity * price];
+    }),
+    Number(order.subtotal || 0),
+    Number(order.taxAmount || 0),
+    Number(order.advance || 0),
+    Number(order.paid || 0),
+    Number(order.debt || 0),
+    order.truck || "",
+    order.extraShipCustomer || "",
+    order.customerResting ? "Có" : "",
+    order.note || "",
+  ]);
+  const paymentRows = payments.map((payment) => [
+    formatDate(payment.date),
+    Number(payment.amount || 0),
+    payment.note || "",
+    (payment.allocations || []).map((item) => `#${item.orderId}: ${Number(item.amount || 0)}`).join("; "),
+  ]);
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8" /><style>
+body{font-family:Arial,sans-serif} h1{font-size:18pt;color:#17352f} h2{font-size:13pt;color:#246b59;margin-top:22px}
+table{border-collapse:collapse;margin-bottom:18px} th{background:#246b59;color:#fff;font-weight:bold}
+th,td{border:1px solid #dfe5e2;padding:6px 8px;vertical-align:top}
+</style></head><body>
+<h1>Hồ sơ khách hàng - ${excelHtml(customerName)}</h1>
+<p>Mã khách: ${excelHtml(code)} - Nhà xe: ${excelHtml(knownCustomer?.NhaXeMacDinh || "")}</p>
+${excelTable(["Số giao dịch", "Tiền hàng", "Thuế", "Ứng xe", "Đã trả", "Còn lại"], [[orders.length, totals.subtotal, totals.tax, totals.advance, totals.paid, totals.debt]])}
+<h2>Lịch sử giao dịch</h2>
+${excelTable(detailHeaders, detailRows)}
+<h2>Lịch sử thanh toán</h2>
+${excelTable(["Ngày", "Số tiền", "Ghi chú", "Giao dịch được phân bổ"], paymentRows)}
+</body></html>`;
+  const blob = new Blob([`\ufeff${html}`], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `ho-so-${excelFilename(customerName)}-${todayInVietnam()}.xls`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 async function exportCustomerProfileExcel(button) {
   const code = button.dataset.code || state.profileCustomerCode;
   if (!code) return;
@@ -1063,7 +1160,12 @@ async function exportCustomerProfileExcel(button) {
     URL.revokeObjectURL(link.href);
     button.textContent = "Đã xuất Excel";
   } catch (error) {
-    button.textContent = error.message;
+    try {
+      exportCustomerProfileBrowserXls(code);
+      button.textContent = "Đã xuất Excel";
+    } catch {
+      button.textContent = error.message;
+    }
   } finally {
     setTimeout(() => {
       button.disabled = false;
