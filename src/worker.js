@@ -10,6 +10,7 @@ import usersFunction from "../backend/users.js";
 import auditLogFunction from "../backend/audit-log.js";
 import exportDebtsFunction from "../backend/export-debts.js";
 import exportCustomerFunction from "../backend/export-customer.js";
+import exportCustomerSheetFunction from "../backend/export-customer-sheet.js";
 import sessionFunction from "../backend/session.js";
 
 const apiRoutes = {
@@ -25,6 +26,7 @@ const apiRoutes = {
   "/api/audit-log": auditLogFunction.handler,
   "/api/export-debts": exportDebtsFunction.handler,
   "/api/export-customer": exportCustomerFunction.handler,
+  "/api/export-customer-sheet": exportCustomerSheetFunction.handler,
   "/api/session": sessionFunction.handler,
 };
 

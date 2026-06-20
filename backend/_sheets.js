@@ -11,8 +11,11 @@ const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 // URL gốc của Google Sheets API.
 const SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets";
-// CRM dùng dữ liệu độc lập; không kết nối hay đọc lại Google Sheets.
-const GOOGLE_SHEETS_CONNECTED = false;
+// CRM dùng dữ liệu độc lập; chỉ kết nối Google Sheets cho các tác vụ xuất/đồng bộ khi được gọi.
+function googleSheetsConnected() {
+  loadLocalEnv();
+  return process.env.GOOGLE_SHEETS_CONNECTED !== "false";
+}
 
 // Đọc file .env khi chạy local bằng npm run dev.
 function loadLocalEnv() {
@@ -147,7 +150,7 @@ async function getAccessToken() {
 
 // Hàm gọi Google Sheets API chung cho mọi request.
 async function googleRequest(path, options = {}) {
-  if (!GOOGLE_SHEETS_CONNECTED) {
+  if (!googleSheetsConnected()) {
     throw new Error("Google Sheets đang tạm ngắt kết nối.");
   }
 
@@ -177,6 +180,42 @@ async function googleRequest(path, options = {}) {
 
   // Trả dữ liệu Google API cho nơi gọi.
   return data;
+}
+
+function spreadsheetId() {
+  return requiredEnv("GOOGLE_SHEET_ID");
+}
+
+function spreadsheetUrl(sheetId = "") {
+  const gid = sheetId === "" ? "" : `#gid=${sheetId}`;
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId()}/edit${gid}`;
+}
+
+async function getSpreadsheetSheets() {
+  const data = await googleRequest("?fields=sheets(properties(sheetId,title))");
+  return data.sheets || [];
+}
+
+async function ensureSheet(title) {
+  const sheets = await getSpreadsheetSheets();
+  const existing = sheets.find((item) => item.properties.title === title);
+  if (existing) return existing.properties.sheetId;
+  const result = await batchUpdate([{
+    addSheet: {
+      properties: {
+        title,
+        gridProperties: { rowCount: 1000, columnCount: 40 },
+      },
+    },
+  }]);
+  return result.replies?.[0]?.addSheet?.properties?.sheetId;
+}
+
+async function clearValues(sheetName, range = "A1:AZ1000") {
+  return googleRequest(`/values/${encodeURIComponent(sheetRange(sheetName, range))}:clear`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 // Tạo range kiểu 'Tên Tab'!A1:Z100.
@@ -421,10 +460,12 @@ module.exports = {
   batchUpdate,
   loadLocalEnv,
   batchUpdateValues,
+  clearValues,
   colToA1,
   dateKey,
   findHeader,
   getSheetIdByTitle,
+  ensureSheet,
   getValues,
   isBlank,
   jsonResponse,
@@ -432,6 +473,7 @@ module.exports = {
   normalizeText,
   parseNumber,
   sheetRange,
+  spreadsheetUrl,
   toSheetDate,
   weekdayForSheet,
 };

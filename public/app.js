@@ -986,12 +986,17 @@ function openCustomerProfile(code, historicalName = "") {
     ? state.productionInfo.find((entry) => normalizeVietnamese(entry.customerCode) === normalizeVietnamese(code))
     : null;
   const profileExportButton = ensureProfileExportButton();
+  const profileSheetButton = ensureProfileSheetButton();
   $("#profileProductionInfo").classList.toggle("hidden", !productionEntry);
   $("#profileProductionInfo").dataset.id = productionEntry?.id || "";
   $("#profileCreateOrder").classList.toggle("hidden", !knownCustomer);
   if (profileExportButton) {
     profileExportButton.classList.toggle("hidden", !knownCustomer);
     profileExportButton.dataset.code = knownCustomer?.MaKH || "";
+  }
+  if (profileSheetButton) {
+    profileSheetButton.classList.toggle("hidden", !knownCustomer);
+    profileSheetButton.dataset.code = knownCustomer?.MaKH || "";
   }
   const orders = matchingOrders.sort(newestOrderFirst);
   const totals = orders.reduce((result, order) => ({
@@ -1036,6 +1041,25 @@ function ensureProfileExportButton() {
   button.type = "button";
   button.textContent = "↓ Xuất Excel";
   actions.prepend(button);
+  return button;
+}
+
+function ensureProfileSheetButton() {
+  let button = $("#profileExportSheet");
+  if (button) return button;
+  const actions = $("#customerProfileDialog .profile-history-head .row-actions");
+  if (!actions) return null;
+  button = document.createElement("button");
+  button.id = "profileExportSheet";
+  button.className = "secondary-button hidden";
+  button.type = "button";
+  button.textContent = "↗ Xuất Google Sheet";
+  const excelButton = $("#profileExportExcel");
+  if (excelButton && excelButton.parentElement === actions) {
+    actions.insertBefore(button, excelButton);
+  } else {
+    actions.prepend(button);
+  }
   return button;
 }
 
@@ -1236,6 +1260,32 @@ async function exportCustomerProfileExcel(button) {
       button.disabled = false;
       button.textContent = originalText;
     }, 1800);
+  }
+}
+
+async function exportCustomerProfileSheet(button) {
+  const code = button.dataset.code || state.profileCustomerCode;
+  if (!code) return;
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Đang đồng bộ...";
+  try {
+    const response = await fetch(unitUrl(`/api/export-customer-sheet?customerCode=${encodeURIComponent(code)}`), {
+      method: "POST",
+      headers: authHeaders({ "content-type": "application/json" }),
+      body: "{}",
+    });
+    const data = await readApiResponse(response);
+    if (!response.ok) throw new Error(data.error || "Không xuất được Google Sheet.");
+    button.textContent = "Đã xuất Sheet";
+    if (data.url) window.open(data.url, "_blank", "noopener");
+  } catch (error) {
+    button.textContent = error.message;
+  } finally {
+    setTimeout(() => {
+      button.disabled = false;
+      button.textContent = originalText;
+    }, 2200);
   }
 }
 
@@ -2739,6 +2789,7 @@ document.addEventListener("click", (event) => {
   const recordPayment = event.target.closest(".record-payment");
   const userSave = event.target.closest(".user-save");
   const profileExportExcel = event.target.closest("#profileExportExcel");
+  const profileExportSheet = event.target.closest("#profileExportSheet");
   if (nav) switchView(nav.dataset.view);
   if (jump) switchView(jump.dataset.jump);
   if (edit) openCustomerDialog(edit.dataset.code);
@@ -2780,6 +2831,7 @@ document.addEventListener("click", (event) => {
   if (attentionCustomer) openCustomerProfile(attentionCustomer.dataset.customer);
   if (recordPayment) openPaymentDialog(recordPayment.dataset.code);
   if (profileExportExcel) exportCustomerProfileExcel(profileExportExcel);
+  if (profileExportSheet) exportCustomerProfileSheet(profileExportSheet);
   if (userSave) {
     const row = userSave.closest("[data-user-id]");
     userSave.disabled = true;
