@@ -1064,6 +1064,10 @@ function excelNumber(value) {
   return Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
 }
 
+function excelQuantityText(value) {
+  return Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+}
+
 function excelCell(cell) {
   if (!cell || typeof cell !== "object" || Array.isArray(cell)) {
     return `<td>${excelHtml(cell)}</td>`;
@@ -1131,9 +1135,9 @@ function exportCustomerProfileBrowserXls(code) {
       const quantity = Number(order[product.quantity] || 0);
       const price = Number(order[product.orderPrice] || 0);
       return [
-        { number: quantity },
+        excelQuantityText(quantity),
         { number: price },
-        { number: quantity * price, formula: "=RC[-2]*RC[-1]" },
+        { number: quantity * price, formula: '=NUMBERVALUE(RC[-2],",",".")*RC[-1]' },
       ];
     });
     const productAmountOffsets = products.map((_, index) => 2 + index * 3 - products.length * 3);

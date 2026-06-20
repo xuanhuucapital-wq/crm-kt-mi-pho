@@ -53,6 +53,10 @@ function excelNumber(value) {
   return Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
 }
 
+function quantityText(value) {
+  return Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+}
+
 function excelCell(cell) {
   if (!cell || typeof cell !== "object" || Array.isArray(cell)) {
     return `<td>${escapeHtml(cell)}</td>`;
@@ -171,9 +175,9 @@ function fallbackWorkbook({ businessUnit, customer, orders, payments }) {
       const quantity = Number(order[product.quantity] || 0);
       const price = Number(order[product.price] || 0);
       return [
-        { number: quantity },
+        quantityText(quantity),
         { number: price },
-        { number: quantity * price, formula: "=RC[-2]*RC[-1]" },
+        { number: quantity * price, formula: '=NUMBERVALUE(RC[-2],",",".")*RC[-1]' },
       ];
     });
     const productAmountOffsets = products.map((_, index) => 2 + index * 3 - products.length * 3);
@@ -299,10 +303,11 @@ async function excelWorkbook({ businessUnit, unitName, customer, orders, payment
       const priceColumn = quantityColumn + 1;
       const amountColumn = quantityColumn + 2;
       productAmountColumns.push(amountColumn);
-      row.getCell(quantityColumn).numFmt = "0.0";
+      row.getCell(quantityColumn).value = quantityText(Number(order[products[index].quantity] || 0));
+      row.getCell(quantityColumn).alignment = { horizontal: "right" };
       row.getCell(priceColumn).numFmt = '#,##0" đ"';
       row.getCell(amountColumn).value = {
-        formula: `${columnLetter(quantityColumn)}${row.number}*${columnLetter(priceColumn)}${row.number}`,
+        formula: `NUMBERVALUE(${columnLetter(quantityColumn)}${row.number},",",".")*${columnLetter(priceColumn)}${row.number}`,
         result: Number(order[products[index].quantity] || 0) * Number(order[products[index].price] || 0),
       };
       row.getCell(amountColumn).numFmt = '#,##0" đ"';
