@@ -1056,8 +1056,26 @@ function excelFilename(value) {
 
 function excelTable(headers, rows) {
   return `<table><thead><tr>${headers.map((header) => `<th>${excelHtml(header)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => (
-    `<tr>${row.map((cell) => `<td>${excelHtml(cell)}</td>`).join("")}</tr>`
+    `<tr>${row.map(excelCell).join("")}</tr>`
   )).join("")}</tbody></table>`;
+}
+
+function excelNumber(value) {
+  return Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+}
+
+function excelCell(cell) {
+  if (!cell || typeof cell !== "object" || Array.isArray(cell)) {
+    return `<td>${excelHtml(cell)}</td>`;
+  }
+  const attributes = [];
+  let text = cell.value;
+  if (cell.number !== undefined) {
+    attributes.push(`x:num="${Number(cell.number || 0)}"`);
+    text = excelNumber(cell.number);
+  }
+  if (cell.formula) attributes.push(`x:fmla="${excelHtml(cell.formula)}"`);
+  return `<td ${attributes.join(" ")}>${excelHtml(text)}</td>`;
 }
 
 function profileExcelProducts(orders) {
@@ -1068,16 +1086,21 @@ function profileExcelProducts(orders) {
 
 function profileExcelExtras(orders, totals) {
   return [
-    { header: "Tiền hàng", value: (order) => Number(order.subtotal || 0) },
-    ...(totals.tax > 0 ? [{ header: "Thuế", value: (order) => Number(order.taxAmount || 0) }] : []),
-    ...(totals.advance > 0 ? [{ header: "Ứng xe", value: (order) => Number(order.advance || 0) }] : []),
-    { header: "Đã trả", value: (order) => Number(order.paid || 0) },
-    { header: "Còn lại", value: (order) => Number(order.debt || 0) },
+    { key: "subtotal", header: "Tiền hàng", value: (order) => Number(order.subtotal || 0) },
+    ...(totals.tax > 0 ? [{ key: "tax", header: "Thuế", value: (order) => Number(order.taxAmount || 0) }] : []),
+    ...(totals.advance > 0 ? [{ key: "advance", header: "Ứng xe", value: (order) => Number(order.advance || 0) }] : []),
+    { key: "paid", header: "Đã trả", value: (order) => Number(order.paid || 0) },
+    { key: "debt", header: "Còn lại", value: (order) => Number(order.debt || 0) },
     ...(orders.some((order) => order.truck) ? [{ header: "Nhà xe", value: (order) => order.truck || "" }] : []),
     ...(orders.some((order) => order.extraShipCustomer) ? [{ header: "Khách phụ ship", value: (order) => order.extraShipCustomer || "" }] : []),
     ...(orders.some((order) => order.customerResting) ? [{ header: "Khách nghỉ", value: (order) => (order.customerResting ? "Có" : "") }] : []),
     ...(orders.some((order) => order.note) ? [{ header: "Ghi chú", value: (order) => order.note || "" }] : []),
   ];
+}
+
+function relativeCellReference(offset) {
+  if (offset === 0) return "RC";
+  return `RC[${offset}]`;
 }
 
 function exportCustomerProfileBrowserXls(code) {
@@ -1103,19 +1126,49 @@ function exportCustomerProfileBrowserXls(code) {
     ...products.flatMap((product) => [`${product.name} - SL kg`, `${product.name} - Đơn giá`, `${product.name} - Thành tiền`]),
     ...extras.map((column) => column.header),
   ];
-  const detailRows = orders.map((order) => [
-    formatDate(order.date),
-    Number(order.id || 0),
-    ...products.flatMap((product) => {
+  const detailRows = orders.map((order) => {
+    const productCells = products.flatMap((product) => {
       const quantity = Number(order[product.quantity] || 0);
       const price = Number(order[product.orderPrice] || 0);
-      return [quantity, price, quantity * price];
-    }),
-    ...extras.map((column) => column.value(order)),
-  ]);
+      return [
+        { number: quantity },
+        { number: price },
+        { number: quantity * price, formula: "=RC[-2]*RC[-1]" },
+      ];
+    });
+    const productAmountOffsets = products.map((_, index) => 2 + index * 3 - products.length * 3);
+    const extraCells = extras.map((column, columnIndex) => {
+      if (column.key === "subtotal" && productAmountOffsets.length) {
+        return {
+          number: Number(order.subtotal || 0),
+          formula: `=SUM(${productAmountOffsets.map((offset) => `RC[${offset}]`).join(",")})`,
+        };
+      }
+      if (column.key === "debt") {
+        const referenceFor = (key) => {
+          const index = extras.findIndex((item) => item.key === key);
+          return index === -1 ? null : relativeCellReference(index - columnIndex);
+        };
+        const addends = [referenceFor("subtotal"), referenceFor("tax"), referenceFor("advance")].filter(Boolean);
+        const paidReference = referenceFor("paid") || "0";
+        return {
+          number: Number(order.debt || 0),
+          formula: `=${addends.join("+") || "0"}-${paidReference}`,
+        };
+      }
+      const value = column.value(order);
+      return typeof value === "number" ? { number: value } : value;
+    });
+    return [
+      formatDate(order.date),
+      { number: Number(order.id || 0) },
+      ...productCells,
+      ...extraCells,
+    ];
+  });
   const paymentRows = payments.map((payment) => [
     formatDate(payment.date),
-    Number(payment.amount || 0),
+    { number: Number(payment.amount || 0) },
     payment.note || "",
     (payment.allocations || []).map((item) => `#${item.orderId}: ${Number(item.amount || 0)}`).join("; "),
   ]);
@@ -1129,14 +1182,14 @@ th,td{border:1px solid #dfe5e2;padding:6px 8px;vertical-align:top}
 <p>Mã khách: ${excelHtml(code)} - Nhà xe: ${excelHtml(knownCustomer?.NhaXeMacDinh || "")}</p>
 ${excelTable(
     ["Số giao dịch", "Tiền hàng", ...(totals.tax > 0 ? ["Thuế"] : []), ...(totals.advance > 0 ? ["Ứng xe"] : []), "Đã trả", "Còn lại"],
-    [[orders.length, totals.subtotal, ...(totals.tax > 0 ? [totals.tax] : []), ...(totals.advance > 0 ? [totals.advance] : []), totals.paid, totals.debt]],
+    [[{ number: orders.length }, { number: totals.subtotal }, ...(totals.tax > 0 ? [{ number: totals.tax }] : []), ...(totals.advance > 0 ? [{ number: totals.advance }] : []), { number: totals.paid }, { number: totals.debt }]],
   )}
 <h2>Lịch sử giao dịch</h2>
 ${excelTable(detailHeaders, detailRows)}
 <h2>Lịch sử thanh toán</h2>
 ${excelTable(["Ngày", "Số tiền", "Ghi chú", "Giao dịch được phân bổ"], paymentRows)}
 </body></html>`;
-  const blob = new Blob([`\ufeff${html}`], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const blob = new Blob([`\ufeff${html.replace("<html>", '<html xmlns:x="urn:schemas-microsoft-com:office:excel">')}`], { type: "application/vnd.ms-excel;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `ho-so-${excelFilename(customerName)}-${todayInVietnam()}.xls`;

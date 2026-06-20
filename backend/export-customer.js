@@ -49,6 +49,30 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function excelNumber(value) {
+  return Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+}
+
+function excelCell(cell) {
+  if (!cell || typeof cell !== "object" || Array.isArray(cell)) {
+    return `<td>${escapeHtml(cell)}</td>`;
+  }
+  const attributes = [];
+  let text = cell.value;
+  if (cell.number !== undefined) {
+    attributes.push(`x:num="${Number(cell.number || 0)}"`);
+    text = excelNumber(cell.number);
+  }
+  if (cell.formula) attributes.push(`x:fmla="${escapeHtml(cell.formula)}"`);
+  return `<td ${attributes.join(" ")}>${escapeHtml(text)}</td>`;
+}
+
+function htmlTable(headers, rows) {
+  return `<table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => (
+    `<tr>${row.map(excelCell).join("")}</tr>`
+  )).join("")}</tbody></table>`;
+}
+
 function asDate(value) {
   if (!value) return null;
   const date = new Date(`${value}T00:00:00+07:00`);
@@ -90,11 +114,11 @@ function usedProducts(businessUnit, orders) {
 
 function detailExtraColumns(orders, totals) {
   return [
-    { header: "Tiền hàng", width: 18, money: true, value: (order) => Number(order.subtotal || 0) },
-    ...(totals.tax > 0 ? [{ header: "Thuế", width: 16, money: true, value: (order) => Number(order.taxAmount || 0) }] : []),
-    ...(totals.advance > 0 ? [{ header: "Ứng xe", width: 16, money: true, value: (order) => Number(order.advance || 0) }] : []),
-    { header: "Đã trả", width: 16, money: true, value: (order) => Number(order.paid || 0) },
-    { header: "Còn lại", width: 16, money: true, value: (order) => Number(order.debt || 0) },
+    { key: "subtotal", header: "Tiền hàng", width: 18, money: true, value: (order) => Number(order.subtotal || 0) },
+    ...(totals.tax > 0 ? [{ key: "tax", header: "Thuế", width: 16, money: true, value: (order) => Number(order.taxAmount || 0) }] : []),
+    ...(totals.advance > 0 ? [{ key: "advance", header: "Ứng xe", width: 16, money: true, value: (order) => Number(order.advance || 0) }] : []),
+    { key: "paid", header: "Đã trả", width: 16, money: true, value: (order) => Number(order.paid || 0) },
+    { key: "debt", header: "Còn lại", width: 16, money: true, value: (order) => Number(order.debt || 0) },
     ...(orders.some((order) => order.truck) ? [{ header: "Nhà xe", width: 18, value: (order) => order.truck || "" }] : []),
     ...(orders.some((order) => order.extraShipCustomer) ? [{ header: "Khách phụ ship", width: 20, value: (order) => order.extraShipCustomer || "" }] : []),
     ...(orders.some((order) => order.customerResting) ? [{ header: "Khách nghỉ", width: 12, value: (order) => (order.customerResting ? "Có" : "") }] : []),
@@ -116,6 +140,22 @@ function orderRow(order, products, extras) {
   ];
 }
 
+function columnLetter(columnNumber) {
+  let value = columnNumber;
+  let letters = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    value = Math.floor((value - 1) / 26);
+  }
+  return letters;
+}
+
+function relativeCellReference(offset) {
+  if (offset === 0) return "RC";
+  return `RC[${offset}]`;
+}
+
 function fallbackWorkbook({ businessUnit, customer, orders, payments }) {
   const products = usedProducts(businessUnit, orders);
   const totals = totalsForOrders(orders);
@@ -127,14 +167,49 @@ function fallbackWorkbook({ businessUnit, customer, orders, payments }) {
     ...extras.map((column) => column.header),
   ];
   const rows = orders.map((order) => {
-    const values = orderRow(order, products, extras);
-    return [displayDate(order.date), ...values.slice(1)];
+    const productCells = products.flatMap((product) => {
+      const quantity = Number(order[product.quantity] || 0);
+      const price = Number(order[product.price] || 0);
+      return [
+        { number: quantity },
+        { number: price },
+        { number: quantity * price, formula: "=RC[-2]*RC[-1]" },
+      ];
+    });
+    const productAmountOffsets = products.map((_, index) => 2 + index * 3 - products.length * 3);
+    const extraCells = extras.map((column, columnIndex) => {
+      if (column.key === "subtotal" && productAmountOffsets.length) {
+        return {
+          number: Number(order.subtotal || 0),
+          formula: `=SUM(${productAmountOffsets.map((offset) => relativeCellReference(offset)).join(",")})`,
+        };
+      }
+      if (column.key === "debt") {
+        const referenceFor = (key) => {
+          const index = extras.findIndex((item) => item.key === key);
+          return index === -1 ? null : relativeCellReference(index - columnIndex);
+        };
+        const addends = [referenceFor("subtotal"), referenceFor("tax"), referenceFor("advance")].filter(Boolean);
+        const paidReference = referenceFor("paid") || "0";
+        return {
+          number: Number(order.debt || 0),
+          formula: `=${addends.join("+") || "0"}-${paidReference}`,
+        };
+      }
+      const value = column.value(order);
+      return typeof value === "number" ? { number: value } : value;
+    });
+    return [
+      displayDate(order.date),
+      { number: Number(order.id || 0) },
+      ...productCells,
+      ...extraCells,
+    ];
   });
-  const htmlRows = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
   const paymentRows = payments.map((payment) => `
     <tr>
       <td>${escapeHtml(displayDate(payment.date))}</td>
-      <td>${escapeHtml(payment.amount || 0)}</td>
+      ${excelCell({ number: Number(payment.amount || 0) })}
       <td>${escapeHtml(payment.note || "")}</td>
       <td>${escapeHtml((payment.allocations || []).map((item) => `#${item.orderId}: ${Number(item.amount || 0).toLocaleString("vi-VN")} đ`).join("; "))}</td>
     </tr>`).join("");
@@ -146,7 +221,7 @@ function fallbackWorkbook({ businessUnit, customer, orders, payments }) {
       "cache-control": "no-store",
     },
     body: `<!doctype html>
-<html><head><meta charset="utf-8" /><style>
+<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8" /><style>
 body{font-family:Arial,sans-serif} h1{font-size:18pt;color:#17352f} h2{font-size:13pt;color:#246b59;margin-top:22px}
 table{border-collapse:collapse;margin-bottom:18px} th{background:#246b59;color:#fff;font-weight:bold}
 th,td{border:1px solid #dfe5e2;padding:6px 8px;vertical-align:top}
@@ -154,12 +229,12 @@ th,td{border:1px solid #dfe5e2;padding:6px 8px;vertical-align:top}
 <h1>Hồ sơ khách hàng - ${escapeHtml(customer.TenKH)}</h1>
 <p>Mã khách: ${escapeHtml(customer.MaKH)} - Nhà xe: ${escapeHtml(customer.NhaXeMacDinh || "")}</p>
 <table><tbody>
-<tr><th>Số giao dịch</th><td>${orders.length}</td><th>Tiền hàng</th><td>${totals.subtotal}</td></tr>
-${totals.tax || totals.advance ? `<tr><th>Thuế</th><td>${totals.tax}</td><th>Ứng xe</th><td>${totals.advance}</td></tr>` : ""}
-<tr><th>Đã trả</th><td>${totals.paid}</td><th>Còn lại</th><td>${totals.debt}</td></tr>
+<tr><th>Số giao dịch</th>${excelCell({ number: orders.length })}<th>Tiền hàng</th>${excelCell({ number: totals.subtotal })}</tr>
+${totals.tax || totals.advance ? `<tr><th>Thuế</th>${excelCell({ number: totals.tax })}<th>Ứng xe</th>${excelCell({ number: totals.advance })}</tr>` : ""}
+<tr><th>Đã trả</th>${excelCell({ number: totals.paid })}<th>Còn lại</th>${excelCell({ number: totals.debt })}</tr>
 </tbody></table>
 <h2>Lịch sử giao dịch</h2>
-<table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${htmlRows}</tbody></table>
+${htmlTable(headers, rows)}
 <h2>Lịch sử thanh toán</h2>
 <table><thead><tr><th>Ngày</th><th>Số tiền</th><th>Ghi chú</th><th>Giao dịch được phân bổ</th></tr></thead><tbody>${paymentRows}</tbody></table>
 </body></html>`,
@@ -218,13 +293,47 @@ async function excelWorkbook({ businessUnit, unitName, customer, orders, payment
   orders.forEach((order) => {
     const row = detail.addRow(orderRow(order, products, extras));
     row.getCell(1).numFmt = "dd/mm/yyyy";
+    const productAmountColumns = [];
     for (let index = 0; index < products.length; index += 1) {
-      row.getCell(3 + index * 3).numFmt = "0.##";
-      row.getCell(4 + index * 3).numFmt = '#,##0" đ"';
-      row.getCell(5 + index * 3).numFmt = '#,##0" đ"';
+      const quantityColumn = 3 + index * 3;
+      const priceColumn = quantityColumn + 1;
+      const amountColumn = quantityColumn + 2;
+      productAmountColumns.push(amountColumn);
+      row.getCell(quantityColumn).numFmt = "0.0";
+      row.getCell(priceColumn).numFmt = '#,##0" đ"';
+      row.getCell(amountColumn).value = {
+        formula: `${columnLetter(quantityColumn)}${row.number}*${columnLetter(priceColumn)}${row.number}`,
+        result: Number(order[products[index].quantity] || 0) * Number(order[products[index].price] || 0),
+      };
+      row.getCell(amountColumn).numFmt = '#,##0" đ"';
     }
     const moneyStart = 3 + products.length * 3;
     extras.forEach((column, index) => {
+      const cell = row.getCell(moneyStart + index);
+      if (column.key === "subtotal" && productAmountColumns.length) {
+        cell.value = {
+          formula: productAmountColumns.map((amountColumn) => `${columnLetter(amountColumn)}${row.number}`).join("+"),
+          result: Number(order.subtotal || 0),
+        };
+      }
+      if (column.key === "debt") {
+        const extraColumn = (key) => {
+          const offset = extras.findIndex((item) => item.key === key);
+          return offset === -1 ? null : moneyStart + offset;
+        };
+        const subtotalColumn = extraColumn("subtotal");
+        const taxColumn = extraColumn("tax");
+        const advanceColumn = extraColumn("advance");
+        const paidColumn = extraColumn("paid");
+        const addends = [subtotalColumn, taxColumn, advanceColumn]
+          .filter(Boolean)
+          .map((item) => `${columnLetter(item)}${row.number}`);
+        const paidTerm = paidColumn ? `${columnLetter(paidColumn)}${row.number}` : "0";
+        cell.value = {
+          formula: `${addends.join("+") || "0"}-${paidTerm}`,
+          result: Number(order.debt || 0),
+        };
+      }
       if (column.money) row.getCell(moneyStart + index).numFmt = '#,##0" đ"';
     });
   });
