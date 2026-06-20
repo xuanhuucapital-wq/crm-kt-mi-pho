@@ -1060,11 +1060,30 @@ function excelTable(headers, rows) {
   )).join("")}</tbody></table>`;
 }
 
+function profileExcelProducts(orders) {
+  return currentUnit().products.filter((product) => (
+    orders.some((order) => Number(order[product.quantity] || 0) > 0)
+  ));
+}
+
+function profileExcelExtras(orders, totals) {
+  return [
+    { header: "Tiền hàng", value: (order) => Number(order.subtotal || 0) },
+    ...(totals.tax > 0 ? [{ header: "Thuế", value: (order) => Number(order.taxAmount || 0) }] : []),
+    ...(totals.advance > 0 ? [{ header: "Ứng xe", value: (order) => Number(order.advance || 0) }] : []),
+    { header: "Đã trả", value: (order) => Number(order.paid || 0) },
+    { header: "Còn lại", value: (order) => Number(order.debt || 0) },
+    ...(orders.some((order) => order.truck) ? [{ header: "Nhà xe", value: (order) => order.truck || "" }] : []),
+    ...(orders.some((order) => order.extraShipCustomer) ? [{ header: "Khách phụ ship", value: (order) => order.extraShipCustomer || "" }] : []),
+    ...(orders.some((order) => order.customerResting) ? [{ header: "Khách nghỉ", value: (order) => (order.customerResting ? "Có" : "") }] : []),
+    ...(orders.some((order) => order.note) ? [{ header: "Ghi chú", value: (order) => order.note || "" }] : []),
+  ];
+}
+
 function exportCustomerProfileBrowserXls(code) {
   const knownCustomer = state.customers.find((item) => item.MaKH === code);
   const customerName = knownCustomer?.TenKH || state.profileCustomerName;
   if (!customerName) throw new Error("Không tìm thấy dữ liệu khách hàng để xuất.");
-  const products = currentUnit().products;
   const orders = state.orders
     .filter((order) => normalizeVietnamese(order.customerName.trim()) === normalizeVietnamese(customerName.trim()))
     .sort(newestOrderFirst);
@@ -1076,19 +1095,13 @@ function exportCustomerProfileBrowserXls(code) {
     paid: result.paid + Number(order.paid || 0),
     debt: result.debt + Number(order.debt || 0),
   }), { subtotal: 0, tax: 0, advance: 0, paid: 0, debt: 0 });
+  const products = profileExcelProducts(orders);
+  const extras = profileExcelExtras(orders, totals);
   const detailHeaders = [
     "Ngày",
     "Mã đơn",
     ...products.flatMap((product) => [`${product.name} - SL kg`, `${product.name} - Đơn giá`, `${product.name} - Thành tiền`]),
-    "Tiền hàng",
-    "Thuế",
-    "Ứng xe",
-    "Đã trả",
-    "Còn lại",
-    "Nhà xe",
-    "Khách phụ ship",
-    "Khách nghỉ",
-    "Ghi chú",
+    ...extras.map((column) => column.header),
   ];
   const detailRows = orders.map((order) => [
     formatDate(order.date),
@@ -1098,15 +1111,7 @@ function exportCustomerProfileBrowserXls(code) {
       const price = Number(order[product.orderPrice] || 0);
       return [quantity, price, quantity * price];
     }),
-    Number(order.subtotal || 0),
-    Number(order.taxAmount || 0),
-    Number(order.advance || 0),
-    Number(order.paid || 0),
-    Number(order.debt || 0),
-    order.truck || "",
-    order.extraShipCustomer || "",
-    order.customerResting ? "Có" : "",
-    order.note || "",
+    ...extras.map((column) => column.value(order)),
   ]);
   const paymentRows = payments.map((payment) => [
     formatDate(payment.date),
@@ -1122,7 +1127,10 @@ th,td{border:1px solid #dfe5e2;padding:6px 8px;vertical-align:top}
 </style></head><body>
 <h1>Hồ sơ khách hàng - ${excelHtml(customerName)}</h1>
 <p>Mã khách: ${excelHtml(code)} - Nhà xe: ${excelHtml(knownCustomer?.NhaXeMacDinh || "")}</p>
-${excelTable(["Số giao dịch", "Tiền hàng", "Thuế", "Ứng xe", "Đã trả", "Còn lại"], [[orders.length, totals.subtotal, totals.tax, totals.advance, totals.paid, totals.debt]])}
+${excelTable(
+    ["Số giao dịch", "Tiền hàng", ...(totals.tax > 0 ? ["Thuế"] : []), ...(totals.advance > 0 ? ["Ứng xe"] : []), "Đã trả", "Còn lại"],
+    [[orders.length, totals.subtotal, ...(totals.tax > 0 ? [totals.tax] : []), ...(totals.advance > 0 ? [totals.advance] : []), totals.paid, totals.debt]],
+  )}
 <h2>Lịch sử giao dịch</h2>
 ${excelTable(detailHeaders, detailRows)}
 <h2>Lịch sử thanh toán</h2>
