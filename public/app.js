@@ -1271,9 +1271,7 @@ async function exportCustomerProfileSheet(button) {
   button.textContent = "Đang đồng bộ...";
   try {
     const response = await fetch(unitUrl(`/api/export-customer?customerCode=${encodeURIComponent(code)}&format=google-sheet`), {
-      method: "POST",
-      headers: authHeaders({ "content-type": "application/json" }),
-      body: "{}",
+      headers: authHeaders(),
     });
     const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không xuất được Google Sheet.");

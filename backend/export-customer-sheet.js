@@ -382,7 +382,7 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
+  if (!["GET", "POST"].includes(event.httpMethod)) return jsonResponse(405, { error: "Method not allowed" });
   try {
     const manager = await requireRole(event, "manager");
     const businessUnit = requireBusinessUnit(manager, event.queryStringParameters?.businessUnit);
