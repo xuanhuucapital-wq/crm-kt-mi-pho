@@ -89,6 +89,9 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/export-debts") {
     return handleFunction(req, res, "export-debts");
   }
+  if (url.pathname === "/api/export-customer") {
+    return handleFunction(req, res, "export-customer");
+  }
 
   let filePath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
   filePath = path.normalize(filePath).replace(/^\.\.(\/|\\|$)/, "");

@@ -988,6 +988,8 @@ function openCustomerProfile(code, historicalName = "") {
   $("#profileProductionInfo").classList.toggle("hidden", !productionEntry);
   $("#profileProductionInfo").dataset.id = productionEntry?.id || "";
   $("#profileCreateOrder").classList.toggle("hidden", !knownCustomer);
+  $("#profileExportExcel").classList.toggle("hidden", !knownCustomer);
+  $("#profileExportExcel").dataset.code = knownCustomer?.MaKH || "";
   const orders = matchingOrders.sort(newestOrderFirst);
   const totals = orders.reduce((result, order) => ({
     revenue: result.revenue + order.total,
@@ -1018,6 +1020,39 @@ function openCustomerProfile(code, historicalName = "") {
     ? `<h3>Thanh toán đã ghi nhận khi test CRM</h3>${payments.map((payment) => `<div><span>${formatDate(payment.date)} · ${escapeHtml(payment.note || "Không ghi chú")}</span><strong>${money.format(payment.amount)}</strong></div>`).join("")}`
     : "";
   if (!$("#customerProfileDialog").open) $("#customerProfileDialog").showModal();
+}
+
+async function exportCustomerProfileExcel(button) {
+  const code = button.dataset.code || state.profileCustomerCode;
+  if (!code) return;
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Đang tạo Excel...";
+  try {
+    const response = await fetch(unitUrl(`/api/export-customer?customerCode=${encodeURIComponent(code)}`), {
+      headers: authHeaders(),
+    });
+    if (!response.ok) {
+      const data = await readApiResponse(response);
+      throw new Error(data.error || "Không xuất được Excel hồ sơ khách hàng.");
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `ho-so-khach-${code}-${todayInVietnam()}.xlsx`;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    button.textContent = "Đã xuất Excel";
+  } catch (error) {
+    button.textContent = error.message;
+  } finally {
+    setTimeout(() => {
+      button.disabled = false;
+      button.textContent = originalText;
+    }, 1800);
+  }
 }
 
 function exportLedgerCsv() {
@@ -2519,6 +2554,7 @@ document.addEventListener("click", (event) => {
   const attentionCustomer = event.target.closest("[data-customer]");
   const recordPayment = event.target.closest(".record-payment");
   const userSave = event.target.closest(".user-save");
+  const profileExportExcel = event.target.closest("#profileExportExcel");
   if (nav) switchView(nav.dataset.view);
   if (jump) switchView(jump.dataset.jump);
   if (edit) openCustomerDialog(edit.dataset.code);
@@ -2559,6 +2595,7 @@ document.addEventListener("click", (event) => {
   if (editProductionInfo) openProductionEdit(editProductionInfo.dataset.id);
   if (attentionCustomer) openCustomerProfile(attentionCustomer.dataset.customer);
   if (recordPayment) openPaymentDialog(recordPayment.dataset.code);
+  if (profileExportExcel) exportCustomerProfileExcel(profileExportExcel);
   if (userSave) {
     const row = userSave.closest("[data-user-id]");
     userSave.disabled = true;

@@ -9,6 +9,7 @@ import productionInfoFunction from "../backend/production-info.js";
 import usersFunction from "../backend/users.js";
 import auditLogFunction from "../backend/audit-log.js";
 import exportDebtsFunction from "../backend/export-debts.js";
+import exportCustomerFunction from "../backend/export-customer.js";
 import sessionFunction from "../backend/session.js";
 
 const apiRoutes = {
@@ -23,6 +24,7 @@ const apiRoutes = {
   "/api/users": usersFunction.handler,
   "/api/audit-log": auditLogFunction.handler,
   "/api/export-debts": exportDebtsFunction.handler,
+  "/api/export-customer": exportCustomerFunction.handler,
   "/api/session": sessionFunction.handler,
 };
 
