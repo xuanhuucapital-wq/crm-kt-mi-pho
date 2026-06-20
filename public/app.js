@@ -985,11 +985,14 @@ function openCustomerProfile(code, historicalName = "") {
   const productionEntry = knownCustomer
     ? state.productionInfo.find((entry) => normalizeVietnamese(entry.customerCode) === normalizeVietnamese(code))
     : null;
+  const profileExportButton = ensureProfileExportButton();
   $("#profileProductionInfo").classList.toggle("hidden", !productionEntry);
   $("#profileProductionInfo").dataset.id = productionEntry?.id || "";
   $("#profileCreateOrder").classList.toggle("hidden", !knownCustomer);
-  $("#profileExportExcel").classList.toggle("hidden", !knownCustomer);
-  $("#profileExportExcel").dataset.code = knownCustomer?.MaKH || "";
+  if (profileExportButton) {
+    profileExportButton.classList.toggle("hidden", !knownCustomer);
+    profileExportButton.dataset.code = knownCustomer?.MaKH || "";
+  }
   const orders = matchingOrders.sort(newestOrderFirst);
   const totals = orders.reduce((result, order) => ({
     revenue: result.revenue + order.total,
@@ -1020,6 +1023,20 @@ function openCustomerProfile(code, historicalName = "") {
     ? `<h3>Thanh toán đã ghi nhận khi test CRM</h3>${payments.map((payment) => `<div><span>${formatDate(payment.date)} · ${escapeHtml(payment.note || "Không ghi chú")}</span><strong>${money.format(payment.amount)}</strong></div>`).join("")}`
     : "";
   if (!$("#customerProfileDialog").open) $("#customerProfileDialog").showModal();
+}
+
+function ensureProfileExportButton() {
+  let button = $("#profileExportExcel");
+  if (button) return button;
+  const actions = $("#customerProfileDialog .profile-history-head .row-actions");
+  if (!actions) return null;
+  button = document.createElement("button");
+  button.id = "profileExportExcel";
+  button.className = "secondary-button hidden";
+  button.type = "button";
+  button.textContent = "↓ Xuất Excel";
+  actions.prepend(button);
+  return button;
 }
 
 async function exportCustomerProfileExcel(button) {
