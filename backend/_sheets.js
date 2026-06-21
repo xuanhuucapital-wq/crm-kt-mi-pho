@@ -214,6 +214,18 @@ async function driveRequest(path, options = {}) {
   return authenticatedJsonRequest(`${DRIVE_URL}${path}`, options);
 }
 
+async function createDriveSpreadsheet(title, folderId = "") {
+  const metadata = {
+    name: title,
+    mimeType: "application/vnd.google-apps.spreadsheet",
+  };
+  if (folderId) metadata.parents = [folderId];
+  return driveRequest("/files?fields=id,name,webViewLink", {
+    method: "POST",
+    body: JSON.stringify(metadata),
+  });
+}
+
 async function shareDriveFile(fileId, emails) {
   const recipients = Array.isArray(emails) ? emails : String(emails || "").split(",");
   const cleanRecipients = recipients.map((email) => email.trim()).filter(Boolean);
@@ -248,8 +260,8 @@ function spreadsheetUrl(sheetId = "", spreadsheetIdValue = spreadsheetId()) {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetIdValue}/edit${gid}`;
 }
 
-async function getSpreadsheetSheets() {
-  const data = await googleRequest("?fields=sheets(properties(sheetId,title))");
+async function getSpreadsheetSheets(spreadsheetIdValue) {
+  const data = await googleRequest("?fields=sheets(properties(sheetId,title))", {}, spreadsheetIdValue);
   return data.sheets || [];
 }
 
@@ -519,10 +531,12 @@ module.exports = {
   batchUpdateValues,
   clearValues,
   colToA1,
+  createDriveSpreadsheet,
   createSpreadsheet,
   dateKey,
   findHeader,
   getSheetIdByTitle,
+  getSpreadsheetSheets,
   ensureSheet,
   getValues,
   isBlank,

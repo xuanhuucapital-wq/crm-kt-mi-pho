@@ -4,9 +4,10 @@ const {
   batchUpdate,
   batchUpdateValues,
   colToA1,
+  createDriveSpreadsheet,
   createSpreadsheet,
+  getSpreadsheetSheets,
   jsonResponse,
-  moveDriveFile,
   shareDriveFile,
   spreadsheetUrl,
 } = require("./_sheets");
@@ -373,14 +374,39 @@ async function styleSheet({
 async function syncCustomerSheet({ businessUnit, unitName, customer, orders, payments }) {
   const title = spreadsheetTitle(customer);
   const tabTitle = "Hồ sơ";
+  const folderId = String(process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
   let spreadsheet;
   try {
-    spreadsheet = await createSpreadsheet(title, tabTitle);
+    spreadsheet = folderId
+      ? await createDriveSpreadsheet(title, folderId)
+      : await createSpreadsheet(title, tabTitle);
   } catch (error) {
-    throw new Error(`Google không cho tạo file Sheet mới: ${error.message}`);
+    throw new Error(
+      folderId
+        ? `Google không cho tạo file Sheet mới trong GOOGLE_EXPORT_FOLDER_ID. Hãy share folder quyền Editor cho service account hoặc bỏ trống folder. Chi tiết: ${error.message}`
+        : `Google không cho tạo file Sheet mới: ${error.message}`,
+    );
   }
-  const spreadsheetId = spreadsheet.spreadsheetId;
-  const sheetId = spreadsheet.sheets?.[0]?.properties?.sheetId || 0;
+  const spreadsheetId = spreadsheet.spreadsheetId || spreadsheet.id;
+  let sheetId = spreadsheet.sheets?.[0]?.properties?.sheetId;
+  if (sheetId === undefined) {
+    try {
+      const sheets = await getSpreadsheetSheets(spreadsheetId);
+      sheetId = sheets[0]?.properties?.sheetId || 0;
+      const currentTitle = sheets[0]?.properties?.title || "";
+      if (currentTitle && currentTitle !== tabTitle) {
+        await batchUpdate([{
+          updateSheetProperties: {
+            properties: { sheetId, title: tabTitle },
+            fields: "title",
+          },
+        }], spreadsheetId);
+      }
+    } catch (error) {
+      throw new Error(`Google đã tạo file nhưng không đọc/đổi được tab mặc định: ${error.message}`);
+    }
+  }
+  sheetId = sheetId || 0;
   const sheet = buildSheetValues({ businessUnit, unitName, customer, orders, payments });
   try {
     await batchUpdateValues([{
@@ -423,14 +449,6 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
     }
   } else {
     warnings.push("File mới đã được tạo bởi service account. Hãy cấu hình GOOGLE_EXPORT_SHARE_EMAILS để tài khoản của bạn mở được link.");
-  }
-  const folderId = String(process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
-  if (folderId) {
-    try {
-      await moveDriveFile(spreadsheetId, folderId);
-    } catch (error) {
-      warnings.push(`Không chuyển được file vào GOOGLE_EXPORT_FOLDER_ID. Hãy share folder đó quyền Editor cho service account hoặc bỏ trống biến này. Chi tiết: ${error.message}`);
-    }
   }
   return {
     title,
