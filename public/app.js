@@ -21,6 +21,7 @@ const state = {
   users: [],
   auditLog: [],
   explicitLogout: false,
+  bulkCopyAddedCustomerCodes: [],
   businessUnit: localStorage.getItem("nhapLieuBusinessUnit") || "mi",
   customerSortDirections: {
     mi: localStorage.getItem("nhapLieuCustomerSortDirection:mi") === "desc" ? "desc" : "asc",
@@ -250,6 +251,8 @@ function ensureBulkCopyUi() {
           <section class="bulk-copy-toolbar">
             <label>Lấy sản lượng từ ngày<input id="bulkCopySourceDate" type="date" required /></label>
             <label>Tạo đơn cho ngày<input id="bulkCopyTargetDate" type="date" required /></label>
+            <label>Thêm khách<select id="bulkCopyAddCustomer"></select></label>
+            <button id="bulkCopyAddCustomerButton" class="secondary-button" type="button">+ Thêm khách</button>
             <button id="bulkCopySelectAll" class="secondary-button" type="button">Chọn tất cả</button>
           </section>
           <div class="table-wrap bulk-copy-table-wrap">
@@ -268,7 +271,7 @@ function ensureBulkCopyUi() {
     document.head.insertAdjacentHTML("beforeend", `
       <style id="bulkCopyRuntimeStyles">
         .bulk-copy-dialog{width:min(1120px,calc(100% - 24px))}
-        .bulk-copy-toolbar{display:grid;grid-template-columns:repeat(2,minmax(180px,240px)) auto;gap:12px;align-items:end;padding:16px 20px;border-bottom:1px solid var(--line)}
+        .bulk-copy-toolbar{display:grid;grid-template-columns:repeat(3,minmax(180px,240px)) auto auto;gap:12px;align-items:end;padding:16px 20px;border-bottom:1px solid var(--line)}
         .bulk-copy-toolbar button{height:42px}
         .bulk-copy-table-wrap{max-height:min(58vh,560px);border-bottom:1px solid var(--line)}
         .bulk-copy-table{min-width:860px}
@@ -1352,6 +1355,10 @@ function ordersForBulkCopy(sourceDate) {
   return [...rows.values()].sort((first, second) => compareCustomerNames(first.customerName, second.customerName));
 }
 
+function customerForCode(code) {
+  return state.customers.find((customer) => normalizeVietnamese(customer.MaKH) === normalizeVietnamese(code));
+}
+
 function latestOrderDateBefore(dateValue) {
   return state.orders
     .map((order) => order.date)
@@ -1360,12 +1367,16 @@ function latestOrderDateBefore(dateValue) {
     .at(-1) || dateDaysBefore(dateValue, 1);
 }
 
-function duplicateOrderOnDate(order, targetDate) {
-  const key = normalizeVietnamese(order.customerName.trim());
+function duplicateCustomerOnDate(customerName, targetDate) {
+  const key = normalizeVietnamese(String(customerName || "").trim());
   return state.orders.some((item) => (
     item.date === targetDate
     && normalizeVietnamese(item.customerName.trim()) === key
   ));
+}
+
+function duplicateOrderOnDate(order, targetDate) {
+  return duplicateCustomerOnDate(order.customerName, targetDate);
 }
 
 function bulkCopyInputValue(order, product) {
@@ -1375,26 +1386,50 @@ function bulkCopyInputValue(order, product) {
   return order[product.quantity] || "";
 }
 
+function bulkCopyQuantityCell(product, value = "", unit = "kg") {
+  const unitSelector = product.key === "phoSoi"
+    ? `<select data-field="phoSoiUnit" aria-label="Đơn vị phở sợi"><option value="kg" ${unit !== "cay" ? "selected" : ""}>kg</option><option value="cay" ${unit === "cay" ? "selected" : ""}>cây</option></select>`
+    : "<span>kg</span>";
+  return `<td><label class="bulk-copy-quantity"><input data-field="${escapeHtml(product.quantity)}" inputmode="decimal" value="${escapeHtml(value)}" /><small>${unitSelector}</small></label></td>`;
+}
+
+function updateBulkCopyAddCustomerOptions(sourceRows = ordersForBulkCopy($("#bulkCopySourceDate").value)) {
+  const sourceNames = new Set(sourceRows.map((order) => normalizeVietnamese(order.customerName)));
+  const addedCodes = new Set(state.bulkCopyAddedCustomerCodes.map((code) => normalizeVietnamese(code)));
+  const options = sortedCustomers()
+    .filter((customer) => !sourceNames.has(normalizeVietnamese(customer.TenKH)))
+    .filter((customer) => !addedCodes.has(normalizeVietnamese(customer.MaKH)))
+    .map((customer) => `<option value="${escapeHtml(customer.MaKH)}">${escapeHtml(customer.MaKH)} · ${escapeHtml(customer.TenKH)}</option>`)
+    .join("");
+  const select = $("#bulkCopyAddCustomer");
+  if (!select) return;
+  select.innerHTML = `<option value="">Chọn khách cần thêm</option>${options}`;
+  $("#bulkCopyAddCustomerButton").disabled = !options;
+}
+
 function renderBulkCopyRows() {
   const sourceDate = $("#bulkCopySourceDate").value;
   const targetDate = $("#bulkCopyTargetDate").value;
   const products = currentUnit().products;
   const rows = ordersForBulkCopy(sourceDate);
+  const sourceNames = new Set(rows.map((order) => normalizeVietnamese(order.customerName)));
+  const manualCustomers = state.bulkCopyAddedCustomerCodes
+    .map(customerForCode)
+    .filter(Boolean)
+    .filter((customer) => !sourceNames.has(normalizeVietnamese(customer.TenKH)))
+    .sort(compareCustomerNames);
   $("#bulkCopyHead").innerHTML = `
     <tr>
-      <th><input id="bulkCopyMasterCheck" type="checkbox" aria-label="Chọn tất cả khách" ${rows.length ? "checked" : ""} /></th>
+      <th><input id="bulkCopyMasterCheck" type="checkbox" aria-label="Chọn tất cả khách" ${rows.length || manualCustomers.length ? "checked" : ""} /></th>
       <th>Khách hàng</th>
       ${products.map((product) => `<th>${escapeHtml(product.name)}</th>`).join("")}
       <th>Nhà xe</th>
       <th>Trạng thái</th>
     </tr>`;
-  $("#bulkCopyRows").innerHTML = rows.map((order) => {
+  const sourceHtml = rows.map((order) => {
     const duplicate = duplicateOrderOnDate(order, targetDate);
     const cells = products.map((product) => {
-      const unitSelector = product.key === "phoSoi"
-        ? `<select data-field="phoSoiUnit" aria-label="Đơn vị phở sợi"><option value="kg" ${order.phoSoiUnit !== "cay" ? "selected" : ""}>kg</option><option value="cay" ${order.phoSoiUnit === "cay" ? "selected" : ""}>cây</option></select>`
-        : "<span>kg</span>";
-      return `<td><label class="bulk-copy-quantity"><input data-field="${escapeHtml(product.quantity)}" inputmode="decimal" value="${escapeHtml(bulkCopyInputValue(order, product))}" /><small>${unitSelector}</small></label></td>`;
+      return bulkCopyQuantityCell(product, bulkCopyInputValue(order, product), order.phoSoiUnit || "kg");
     }).join("");
     return `
       <tr data-source-id="${order.id}">
@@ -1404,10 +1439,26 @@ function renderBulkCopyRows() {
         <td>${escapeHtml(order.truck || "—")}</td>
         <td>${duplicate ? '<span class="status watch">Đã có đơn ngày này</span>' : '<span class="status ok">Sẵn sàng</span>'}</td>
       </tr>`;
-  }).join("") || `<tr><td colspan="${4 + products.length}" class="empty-row">Không có đơn hàng trong ngày này để copy.</td></tr>`;
-  $("#bulkCopySubtitle").textContent = rows.length
-    ? `Tìm thấy ${number.format(rows.length)} khách từ ngày ${formatDate(sourceDate)}. Giá và thông tin đơn sẽ lấy theo đơn mẫu.`
+  }).join("");
+  const manualHtml = manualCustomers.map((customer) => {
+    const duplicate = duplicateCustomerOnDate(customer.TenKH, targetDate);
+    const cells = products.map((product) => bulkCopyQuantityCell(product)).join("");
+    return `
+      <tr data-customer-code="${escapeHtml(customer.MaKH)}">
+        <td><input class="bulk-copy-check" type="checkbox" ${duplicate ? "" : "checked"} aria-label="Chọn ${escapeHtml(customer.TenKH)}" /></td>
+        <td><strong>${escapeHtml(customer.TenKH)}</strong><small class="block">Thêm tay · ${escapeHtml(customer.MaKH)}</small></td>
+        ${cells}
+        <td>${escapeHtml(customer.NhaXeMacDinh || "—")}</td>
+        <td>${duplicate ? '<span class="status watch">Đã có đơn ngày này</span>' : '<span class="status ok">Thêm mới</span>'}</td>
+      </tr>`;
+  }).join("");
+  const tableHtml = `${sourceHtml}${manualHtml}`;
+  $("#bulkCopyRows").innerHTML = tableHtml
+    || `<tr><td colspan="${4 + products.length}" class="empty-row">Không có đơn hàng trong ngày này để copy. Bạn vẫn có thể chọn khách ở trên để thêm tay.</td></tr>`;
+  $("#bulkCopySubtitle").textContent = rows.length || manualCustomers.length
+    ? `Tìm thấy ${number.format(rows.length)} khách từ ngày ${formatDate(sourceDate)}${manualCustomers.length ? `, thêm tay ${number.format(manualCustomers.length)} khách` : ""}. Giá và thông tin đơn sẽ lấy theo hồ sơ khách.`
     : `Không có đơn trong ngày ${formatDate(sourceDate)}. Hãy chọn ngày khác.`;
+  updateBulkCopyAddCustomerOptions(rows);
   updateBulkCopySelection();
 }
 
@@ -1427,12 +1478,47 @@ function openBulkCopyDialog() {
   const today = todayInVietnam();
   $("#bulkCopyTargetDate").value = today;
   $("#bulkCopySourceDate").value = latestOrderDateBefore(today);
+  state.bulkCopyAddedCustomerCodes = [];
   $("#bulkCopyResult").className = "notice";
   renderBulkCopyRows();
   $("#bulkCopyDialog").showModal();
 }
 
 function bulkCopyPayloadFromRow(row) {
+  const customerCode = row.dataset.customerCode;
+  if (customerCode) {
+    const customer = customerForCode(customerCode);
+    if (!customer) throw new Error("Không tìm thấy khách cần thêm.");
+    const valueFor = (field, fallback = "") => row.querySelector(`[data-field="${field}"]`)?.value ?? fallback;
+    const payload = {
+      businessUnit: state.businessUnit,
+      customerCode: customer.MaKH,
+      orderDate: $("#bulkCopyTargetDate").value,
+      nhaXe: customer.NhaXeMacDinh || "",
+      extraShipCustomer: "",
+      tienUng: "",
+      taxRate: customer.ThueSuat || 0,
+      taxPayer: "customer",
+      customerResting: false,
+      ghiChu: "",
+      paymentMethod: "debt",
+      paid: 0,
+      miKg: 0,
+      caoKg: 0,
+      hoanhKg: 0,
+      huTieu: 0,
+      voBanhGoi: 0,
+      thungXop: 0,
+      phoSoiKg: 0,
+      phoSoiUnit: "kg",
+      phoCuonKg: 0,
+    };
+    currentUnit().products.forEach((product) => {
+      payload[product.quantity] = valueFor(product.quantity, payload[product.quantity]);
+    });
+    if (state.businessUnit === "pho") payload.phoSoiUnit = valueFor("phoSoiUnit", payload.phoSoiUnit);
+    return payload;
+  }
   const source = state.orders.find((order) => Number(order.id) === Number(row.dataset.sourceId));
   if (!source) throw new Error("Không tìm thấy đơn mẫu.");
   const valueFor = (field, fallback = "") => row.querySelector(`[data-field="${field}"]`)?.value ?? fallback;
@@ -1477,6 +1563,7 @@ async function saveBulkCopiedOrders(button) {
   let created = 0;
   for (const row of selectedRows) {
     const source = state.orders.find((order) => Number(order.id) === Number(row.dataset.sourceId));
+    const manualCustomer = row.dataset.customerCode ? customerForCode(row.dataset.customerCode) : null;
     try {
       const response = await fetch("/api/orders", {
         method: "POST",
@@ -1487,7 +1574,7 @@ async function saveBulkCopiedOrders(button) {
       if (!response.ok) throw new Error(data.error || "Không tạo được đơn.");
       created += 1;
     } catch (error) {
-      errors.push(`${source?.customerName || `Đơn #${row.dataset.sourceId}`}: ${error.message}`);
+      errors.push(`${source?.customerName || manualCustomer?.TenKH || `Đơn #${row.dataset.sourceId || row.dataset.customerCode}`}: ${error.message}`);
     }
   }
   await loadCrm();
@@ -2523,6 +2610,14 @@ if ($("#copyProductionButton") && $("#bulkCopyForm")) {
     const shouldCheck = checks.some((input) => !input.checked);
     checks.forEach((input) => { input.checked = shouldCheck; });
     updateBulkCopySelection();
+  });
+  $("#bulkCopyAddCustomerButton").addEventListener("click", () => {
+    const code = $("#bulkCopyAddCustomer").value;
+    if (!code) return;
+    if (!state.bulkCopyAddedCustomerCodes.some((item) => normalizeVietnamese(item) === normalizeVietnamese(code))) {
+      state.bulkCopyAddedCustomerCodes.push(code);
+    }
+    renderBulkCopyRows();
   });
   $("#bulkCopyRows").addEventListener("input", updateBulkCopySelection);
   $("#bulkCopyRows").addEventListener("change", updateBulkCopySelection);
