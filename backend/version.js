@@ -1,6 +1,6 @@
 const { jsonResponse, loadLocalEnv } = require("./_sheets");
 
-const APP_VERSION = "2026-06-21-google-sheet-diagnostics";
+const APP_VERSION = "2026-06-21-google-oauth-export";
 
 exports.handler = async () => {
   loadLocalEnv();
@@ -14,6 +14,14 @@ exports.handler = async () => {
       hasPrivateKey: Boolean(process.env.GOOGLE_PRIVATE_KEY),
       hasExportShareEmails: Boolean(process.env.GOOGLE_EXPORT_SHARE_EMAILS || process.env.GOOGLE_EXPORT_SHARE_EMAIL),
       hasExportFolderId: Boolean(process.env.GOOGLE_EXPORT_FOLDER_ID),
+      hasOAuthClientId: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID),
+      hasOAuthClientSecret: Boolean(process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+      hasOAuthRefreshToken: Boolean(process.env.GOOGLE_OAUTH_REFRESH_TOKEN),
+      usesOAuthExport: Boolean(
+        process.env.GOOGLE_OAUTH_CLIENT_ID
+        && process.env.GOOGLE_OAUTH_CLIENT_SECRET
+        && process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+      ),
       sheetsConnected: process.env.GOOGLE_SHEETS_CONNECTED !== "false",
     },
   });

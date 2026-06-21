@@ -104,8 +104,38 @@ function normalizePrivateKey(key) {
   return key.replace(/^"|"$/g, "").replace(/\\n/g, "\n");
 }
 
+function hasOAuthCredentials() {
+  loadLocalEnv();
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID
+    && process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    && process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+  );
+}
+
+async function getOAuthAccessToken() {
+  const clientId = requiredEnv("GOOGLE_OAUTH_CLIENT_ID");
+  const clientSecret = requiredEnv("GOOGLE_OAUTH_CLIENT_SECRET");
+  const refreshToken = requiredEnv("GOOGLE_OAUTH_REFRESH_TOKEN");
+  const response = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error_description || data.error || "Google OAuth refresh failed");
+  }
+  return data.access_token;
+}
+
 // Xin access token từ Google bằng Service Account.
-async function getAccessToken() {
+async function getServiceAccountAccessToken() {
   // Email Service Account lấy từ env.
   const email = requiredEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   // Private key Service Account lấy từ env.
@@ -154,6 +184,10 @@ async function getAccessToken() {
 
   // Trả access token để gọi Google Sheets API.
   return data.access_token;
+}
+
+async function getAccessToken() {
+  return hasOAuthCredentials() ? getOAuthAccessToken() : getServiceAccountAccessToken();
 }
 
 async function authenticatedJsonRequest(url, options = {}) {
@@ -542,6 +576,7 @@ module.exports = {
   getSpreadsheetSheets,
   ensureSheet,
   getValues,
+  hasOAuthCredentials,
   isBlank,
   jsonResponse,
   normalizeDate,

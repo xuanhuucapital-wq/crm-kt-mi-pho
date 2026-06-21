@@ -36,6 +36,7 @@ async function handleFunction(req, res, name) {
       httpMethod: req.method,
       headers: req.headers,
       body,
+      path: new URL(req.url, "http://localhost").pathname,
       queryStringParameters: Object.fromEntries(new URL(req.url, "http://localhost").searchParams),
     });
     res.writeHead(result.statusCode || 200, {
@@ -97,6 +98,9 @@ const server = http.createServer((req, res) => {
   }
   if (url.pathname === "/api/export-customer-sheet") {
     return handleFunction(req, res, "export-customer-sheet");
+  }
+  if (url.pathname === "/api/google-oauth/start" || url.pathname === "/api/google-oauth/callback") {
+    return handleFunction(req, res, "google-oauth");
   }
 
   let filePath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);

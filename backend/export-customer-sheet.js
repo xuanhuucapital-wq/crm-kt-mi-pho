@@ -7,6 +7,7 @@ const {
   createDriveSpreadsheet,
   createSpreadsheet,
   getSpreadsheetSheets,
+  hasOAuthCredentials,
   jsonResponse,
   shareDriveFile,
   spreadsheetUrl,
@@ -381,10 +382,11 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
       ? await createDriveSpreadsheet(title, folderId)
       : await createSpreadsheet(title, tabTitle);
   } catch (error) {
+    const usingOAuth = hasOAuthCredentials();
     throw new Error(
       folderId
-        ? `Google không cho tạo file Sheet mới trong GOOGLE_EXPORT_FOLDER_ID. Hãy share folder quyền Editor cho service account hoặc bỏ trống folder. Chi tiết: ${error.message}`
-        : `Google không cho tạo file Sheet mới vì GOOGLE_EXPORT_FOLDER_ID đang trống hoặc Drive của service account bị chặn. Hãy tạo một folder Google Drive, share Editor cho service account, rồi cấu hình GOOGLE_EXPORT_FOLDER_ID. Chi tiết: ${error.message}`,
+        ? `Google không cho tạo file Sheet mới trong GOOGLE_EXPORT_FOLDER_ID. ${usingOAuth ? "Hãy kiểm tra Gmail OAuth có quyền tạo file trong folder này và Drive còn dung lượng." : "Hãy share folder quyền Editor cho service account hoặc bỏ trống folder."} Chi tiết: ${error.message}`
+        : `Google không cho tạo file Sheet mới. ${usingOAuth ? "Hãy kiểm tra Gmail OAuth còn dung lượng Drive và đã cấp quyền." : "GOOGLE_EXPORT_FOLDER_ID đang trống hoặc Drive của service account bị chặn. Hãy tạo một folder Google Drive, share Editor cho service account, rồi cấu hình GOOGLE_EXPORT_FOLDER_ID."} Chi tiết: ${error.message}`,
     );
   }
   const spreadsheetId = spreadsheet.spreadsheetId || spreadsheet.id;
