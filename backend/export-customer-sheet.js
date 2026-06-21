@@ -397,22 +397,35 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
     extras: sheet.extras,
     summaryColumnCount: sheet.rows[3].length,
   });
-  const folderId = String(process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
-  if (folderId) await moveDriveFile(spreadsheetId, folderId);
+  const warnings = [];
   const shareEmails = String(process.env.GOOGLE_EXPORT_SHARE_EMAILS || process.env.GOOGLE_EXPORT_SHARE_EMAIL || "")
     .split(",")
     .map((email) => email.trim())
     .filter(Boolean);
-  if (shareEmails.length) await shareDriveFile(spreadsheetId, shareEmails);
+  if (shareEmails.length) {
+    try {
+      await shareDriveFile(spreadsheetId, shareEmails);
+    } catch (error) {
+      warnings.push(`Không share được file cho ${shareEmails.join(", ")}: ${error.message}`);
+    }
+  } else {
+    warnings.push("File mới đã được tạo bởi service account. Hãy cấu hình GOOGLE_EXPORT_SHARE_EMAILS để tài khoản của bạn mở được link.");
+  }
+  const folderId = String(process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
+  if (folderId) {
+    try {
+      await moveDriveFile(spreadsheetId, folderId);
+    } catch (error) {
+      warnings.push("Không chuyển được file vào GOOGLE_EXPORT_FOLDER_ID. Hãy share folder đó quyền Editor cho service account hoặc bỏ trống biến này.");
+    }
+  }
   return {
     title,
     spreadsheetId,
     sheetId,
     sharedWith: shareEmails,
     url: spreadsheetUrl(sheetId, spreadsheetId),
-    warning: shareEmails.length || folderId
-      ? ""
-      : "File mới đã được tạo bởi service account. Hãy cấu hình GOOGLE_EXPORT_SHARE_EMAILS hoặc GOOGLE_EXPORT_FOLDER_ID để tài khoản của bạn mở được link.",
+    warning: warnings.join("\n"),
   };
 }
 
