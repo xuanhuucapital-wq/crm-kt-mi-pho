@@ -104,17 +104,26 @@ function normalizePrivateKey(key) {
   return key.replace(/^"|"$/g, "").replace(/\\n/g, "\n");
 }
 
+function normalizeOAuthClientId(clientId) {
+  const suffix = ".apps.googleusercontent.com";
+  let value = String(clientId || "").trim();
+  while (value.endsWith(`${suffix}${suffix}`)) {
+    value = value.slice(0, -suffix.length);
+  }
+  return value;
+}
+
 function hasOAuthCredentials() {
   loadLocalEnv();
   return Boolean(
-    process.env.GOOGLE_OAUTH_CLIENT_ID
+    normalizeOAuthClientId(process.env.GOOGLE_OAUTH_CLIENT_ID)
     && process.env.GOOGLE_OAUTH_CLIENT_SECRET
     && process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
   );
 }
 
 async function getOAuthAccessToken() {
-  const clientId = requiredEnv("GOOGLE_OAUTH_CLIENT_ID");
+  const clientId = normalizeOAuthClientId(requiredEnv("GOOGLE_OAUTH_CLIENT_ID"));
   const clientSecret = requiredEnv("GOOGLE_OAUTH_CLIENT_SECRET");
   const refreshToken = requiredEnv("GOOGLE_OAUTH_REFRESH_TOKEN");
   const response = await fetch(TOKEN_URL, {

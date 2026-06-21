@@ -12,6 +12,15 @@ function env(name) {
   return String(process.env[name] || "").trim();
 }
 
+function oauthClientId() {
+  const suffix = ".apps.googleusercontent.com";
+  let value = env("GOOGLE_OAUTH_CLIENT_ID");
+  while (value.endsWith(`${suffix}${suffix}`)) {
+    value = value.slice(0, -suffix.length);
+  }
+  return value;
+}
+
 function redirectUri(event) {
   return env("GOOGLE_OAUTH_REDIRECT_URI") || `${event.headers["x-forwarded-proto"] || "https"}://${event.headers.host}/api/google-oauth/callback`;
 }
@@ -68,7 +77,7 @@ function tokenPage({ refreshToken, accessToken, scope }) {
 }
 
 async function start(event) {
-  const clientId = env("GOOGLE_OAUTH_CLIENT_ID");
+  const clientId = oauthClientId();
   const clientSecret = env("GOOGLE_OAUTH_CLIENT_SECRET");
   if (!clientId || !clientSecret) {
     return jsonResponse(400, {
@@ -106,7 +115,7 @@ async function callback(event) {
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: env("GOOGLE_OAUTH_CLIENT_ID"),
+      client_id: oauthClientId(),
       client_secret: env("GOOGLE_OAUTH_CLIENT_SECRET"),
       redirect_uri: redirectUri(event),
       grant_type: "authorization_code",
