@@ -1274,6 +1274,10 @@ async function exportCustomerProfileSheet(button) {
     const response = await fetch(unitUrl(`/api/export-customer?customerCode=${encodeURIComponent(code)}&format=google-sheet`), {
       headers: authHeaders(),
     });
+    const contentType = response.headers.get("content-type") || "";
+    if (response.ok && !contentType.includes("application/json")) {
+      throw new Error("Backend production chưa cập nhật xuất Google Sheet. Hãy deploy/restart server bản mới nhất.");
+    }
     const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không xuất được Google Sheet.");
     button.textContent = "Đã xuất Sheet";
