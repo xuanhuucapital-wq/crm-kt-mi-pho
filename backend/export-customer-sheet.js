@@ -151,11 +151,23 @@ function detailRow(order, products, extras, rowNumber) {
   ];
 }
 
+function detailSumFormula(products, extras, key, startRow, rowCount) {
+  if (!rowCount) return 0;
+  const offset = extras.findIndex((column) => column.key === key);
+  if (offset === -1) return 0;
+  const column = colToA1(2 + products.length * 3 + offset);
+  const endRow = startRow + rowCount - 1;
+  return `=SUM(${column}${startRow}:${column}${endRow})`;
+}
+
 function buildSheetValues({ unitName, customer, orders, payments }) {
   const products = usedProducts(normalizeBusinessUnit(customer.businessUnit), orders);
   const totals = totalsForOrders(orders);
   const extras = detailExtraColumns(orders, totals);
   const headers = detailHeaders(products, extras);
+  const detailTitleRow = 7;
+  const detailHeaderRow = 9;
+  const detailDataStartRow = 10;
   const summaryHeaders = [
     "Số giao dịch",
     "Tiền hàng",
@@ -164,17 +176,23 @@ function buildSheetValues({ unitName, customer, orders, payments }) {
     "Đã trả",
     "Còn lại",
   ];
+  const summaryColumnFor = (label) => {
+    const index = summaryHeaders.indexOf(label);
+    return index === -1 ? null : colToA1(index);
+  };
+  const paidSummaryColumn = summaryColumnFor("Đã trả");
+  const debtAddends = ["Tiền hàng", "Thuế", "Ứng xe"]
+    .map(summaryColumnFor)
+    .filter(Boolean)
+    .map((column) => `${column}5`);
   const summaryValues = [
     orders.length,
-    totals.subtotal,
-    ...(totals.tax > 0 ? [totals.tax] : []),
-    ...(totals.advance > 0 ? [totals.advance] : []),
-    totals.paid,
-    totals.debt,
+    detailSumFormula(products, extras, "subtotal", detailDataStartRow, orders.length),
+    ...(totals.tax > 0 ? [detailSumFormula(products, extras, "tax", detailDataStartRow, orders.length)] : []),
+    ...(totals.advance > 0 ? [detailSumFormula(products, extras, "advance", detailDataStartRow, orders.length)] : []),
+    detailSumFormula(products, extras, "paid", detailDataStartRow, orders.length),
+    `=${debtAddends.join("+") || "0"}-${paidSummaryColumn ? `${paidSummaryColumn}5` : "0"}`,
   ];
-  const detailTitleRow = 7;
-  const detailHeaderRow = 9;
-  const detailDataStartRow = 10;
   const rows = [
     [`Hồ sơ khách hàng - ${customer.TenKH}`],
     [`Mã khách: ${customer.MaKH}`, `Nhà xe: ${customer.NhaXeMacDinh || ""}`, `Phân hệ: ${unitName}`],
