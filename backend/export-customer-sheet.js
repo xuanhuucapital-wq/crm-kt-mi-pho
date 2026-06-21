@@ -249,7 +249,7 @@ function quantityColumnRequests(sheetId, rowStartIndex, rowCount, columnIndexes)
       },
       cell: {
         userEnteredFormat: {
-          numberFormat: { type: "NUMBER", pattern: "0.##" },
+          numberFormat: { type: "NUMBER", pattern: "#,##0.###" },
           horizontalAlignment: "RIGHT",
         },
       },
