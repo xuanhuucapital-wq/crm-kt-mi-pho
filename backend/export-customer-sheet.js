@@ -276,6 +276,14 @@ function quantityColumnRequests(sheetId, rowStartIndex, rowCount, columnIndexes)
   }));
 }
 
+function exportFolderForBusinessUnit(businessUnit) {
+  const unit = normalizeBusinessUnit(businessUnit);
+  const unitFolderId = unit === "pho"
+    ? process.env.GOOGLE_EXPORT_FOLDER_ID_PHO
+    : process.env.GOOGLE_EXPORT_FOLDER_ID_MI;
+  return String(unitFolderId || process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
+}
+
 async function styleSheet({
   spreadsheetId,
   sheetId,
@@ -393,7 +401,8 @@ async function styleSheet({
 async function syncCustomerSheet({ businessUnit, unitName, customer, orders, payments }) {
   const title = spreadsheetTitle(customer);
   const tabTitle = "Hồ sơ";
-  const folderId = String(process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
+  const folderId = exportFolderForBusinessUnit(businessUnit);
+  const folderLabel = normalizeBusinessUnit(businessUnit) === "pho" ? "GOOGLE_EXPORT_FOLDER_ID_PHO" : "GOOGLE_EXPORT_FOLDER_ID_MI";
   let spreadsheet;
   try {
     spreadsheet = folderId
@@ -403,7 +412,7 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
     const usingOAuth = hasOAuthCredentials();
     throw new Error(
       folderId
-        ? `Google không cho tạo file Sheet mới trong GOOGLE_EXPORT_FOLDER_ID. ${usingOAuth ? "Hãy kiểm tra Gmail OAuth có quyền tạo file trong folder này và Drive còn dung lượng." : "Hãy share folder quyền Editor cho service account hoặc bỏ trống folder."} Chi tiết: ${error.message}`
+        ? `Google không cho tạo file Sheet mới trong ${folderLabel}. ${usingOAuth ? "Hãy kiểm tra Gmail OAuth có quyền tạo file trong folder này và Drive còn dung lượng." : "Hãy share folder quyền Editor cho service account hoặc bỏ trống folder."} Chi tiết: ${error.message}`
         : `Google không cho tạo file Sheet mới. ${usingOAuth ? "Hãy kiểm tra Gmail OAuth còn dung lượng Drive và đã cấp quyền." : "GOOGLE_EXPORT_FOLDER_ID đang trống hoặc Drive của service account bị chặn. Hãy tạo một folder Google Drive, share Editor cho service account, rồi cấu hình GOOGLE_EXPORT_FOLDER_ID."} Chi tiết: ${error.message}`,
     );
   }
