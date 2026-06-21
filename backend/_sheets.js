@@ -24,12 +24,15 @@ function googleSheetsConnected() {
 
 // Đọc file .env khi chạy local bằng npm run dev.
 function loadLocalEnv() {
-  // File .env nằm ở thư mục gốc dự án.
-  const envPath = path.join(process.cwd(), ".env");
-  // Nếu không có file .env thì bỏ qua.
-  if (!fs.existsSync(envPath)) {
-    return;
-  }
+  // File .env thường nằm ở thư mục gốc dự án; Passenger đôi khi có cwd khác.
+  const envPath = [
+    path.join(process.cwd(), ".env"),
+    path.join(__dirname, "..", ".env"),
+  ].find((candidate, index, candidates) => (
+    candidates.indexOf(candidate) === index && fs.existsSync(candidate)
+  ));
+  // Nếu không có file .env thì bỏ qua, app vẫn có thể dùng env do Plesk cấp.
+  if (!envPath) return;
 
   // Đọc từng dòng trong file .env.
   const lines = fs.readFileSync(envPath, "utf8").split(/\n/);
