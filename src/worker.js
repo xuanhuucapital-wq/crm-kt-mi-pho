@@ -12,6 +12,7 @@ import exportDebtsFunction from "../backend/export-debts.js";
 import exportCustomerFunction from "../backend/export-customer.js";
 import exportCustomerSheetFunction from "../backend/export-customer-sheet.js";
 import sessionFunction from "../backend/session.js";
+import versionFunction from "../backend/version.js";
 
 const apiRoutes = {
   "/api/login": loginFunction.handler,
@@ -28,6 +29,7 @@ const apiRoutes = {
   "/api/export-customer": exportCustomerFunction.handler,
   "/api/export-customer-sheet": exportCustomerSheetFunction.handler,
   "/api/session": sessionFunction.handler,
+  "/api/version": versionFunction.handler,
 };
 
 const securityHeaders = {
