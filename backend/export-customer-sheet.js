@@ -384,7 +384,7 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
     throw new Error(
       folderId
         ? `Google không cho tạo file Sheet mới trong GOOGLE_EXPORT_FOLDER_ID. Hãy share folder quyền Editor cho service account hoặc bỏ trống folder. Chi tiết: ${error.message}`
-        : `Google không cho tạo file Sheet mới: ${error.message}`,
+        : `Google không cho tạo file Sheet mới vì GOOGLE_EXPORT_FOLDER_ID đang trống hoặc Drive của service account bị chặn. Hãy tạo một folder Google Drive, share Editor cho service account, rồi cấu hình GOOGLE_EXPORT_FOLDER_ID. Chi tiết: ${error.message}`,
     );
   }
   const spreadsheetId = spreadsheet.spreadsheetId || spreadsheet.id;
