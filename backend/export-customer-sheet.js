@@ -373,30 +373,43 @@ async function styleSheet({
 async function syncCustomerSheet({ businessUnit, unitName, customer, orders, payments }) {
   const title = spreadsheetTitle(customer);
   const tabTitle = "Hồ sơ";
-  const spreadsheet = await createSpreadsheet(title, tabTitle);
+  let spreadsheet;
+  try {
+    spreadsheet = await createSpreadsheet(title, tabTitle);
+  } catch (error) {
+    throw new Error(`Google không cho tạo file Sheet mới: ${error.message}`);
+  }
   const spreadsheetId = spreadsheet.spreadsheetId;
   const sheetId = spreadsheet.sheets?.[0]?.properties?.sheetId || 0;
   const sheet = buildSheetValues({ businessUnit, unitName, customer, orders, payments });
-  await batchUpdateValues([{
-    range: `'${tabTitle}'!A1`,
-    values: sheet.rows,
-  }], spreadsheetId);
+  try {
+    await batchUpdateValues([{
+      range: `'${tabTitle}'!A1`,
+      values: sheet.rows,
+    }], spreadsheetId);
+  } catch (error) {
+    throw new Error(`Google đã tạo file nhưng không cho ghi dữ liệu: ${error.message}`);
+  }
   const columnCount = Math.max(...sheet.rows.map((row) => row.length), 1);
-  await styleSheet({
-    spreadsheetId,
-    sheetId,
-    detailTitleRow: sheet.detailTitleRow,
-    detailHeaderRow: sheet.detailHeaderRow,
-    detailDataStartRow: sheet.detailDataStartRow,
-    paymentTitleRow: sheet.paymentTitleRow,
-    paymentHeaderRow: sheet.paymentHeaderRow,
-    paymentDataStartRow: sheet.paymentDataStartRow,
-    rowCount: sheet.rows.length,
-    columnCount,
-    products: sheet.products,
-    extras: sheet.extras,
-    summaryColumnCount: sheet.rows[3].length,
-  });
+  try {
+    await styleSheet({
+      spreadsheetId,
+      sheetId,
+      detailTitleRow: sheet.detailTitleRow,
+      detailHeaderRow: sheet.detailHeaderRow,
+      detailDataStartRow: sheet.detailDataStartRow,
+      paymentTitleRow: sheet.paymentTitleRow,
+      paymentHeaderRow: sheet.paymentHeaderRow,
+      paymentDataStartRow: sheet.paymentDataStartRow,
+      rowCount: sheet.rows.length,
+      columnCount,
+      products: sheet.products,
+      extras: sheet.extras,
+      summaryColumnCount: sheet.rows[3].length,
+    });
+  } catch (error) {
+    throw new Error(`Google đã ghi dữ liệu nhưng không cho định dạng Sheet: ${error.message}`);
+  }
   const warnings = [];
   const shareEmails = String(process.env.GOOGLE_EXPORT_SHARE_EMAILS || process.env.GOOGLE_EXPORT_SHARE_EMAIL || "")
     .split(",")
@@ -416,7 +429,7 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
     try {
       await moveDriveFile(spreadsheetId, folderId);
     } catch (error) {
-      warnings.push("Không chuyển được file vào GOOGLE_EXPORT_FOLDER_ID. Hãy share folder đó quyền Editor cho service account hoặc bỏ trống biến này.");
+      warnings.push(`Không chuyển được file vào GOOGLE_EXPORT_FOLDER_ID. Hãy share folder đó quyền Editor cho service account hoặc bỏ trống biến này. Chi tiết: ${error.message}`);
     }
   }
   return {
