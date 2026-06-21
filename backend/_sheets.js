@@ -5,12 +5,17 @@ const fs = require("fs");
 // Module path dùng để tạo đường dẫn file .env đúng trên máy.
 const path = require("path");
 
-// Quyền Google API cần dùng: đọc và ghi Google Sheets.
-const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+// Quyền Google API cần dùng: đọc/ghi Sheets và chia sẻ file Sheet app tạo ra.
+const SCOPES = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/drive.file",
+];
 // URL Google dùng để đổi JWT thành access token.
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 // URL gốc của Google Sheets API.
 const SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets";
+// URL gốc của Google Drive API, dùng để share file Google Sheet mới tạo.
+const DRIVE_URL = "https://www.googleapis.com/drive/v3";
 // CRM dùng dữ liệu độc lập; chỉ kết nối Google Sheets cho các tác vụ xuất/đồng bộ khi được gọi.
 function googleSheetsConnected() {
   loadLocalEnv();
@@ -148,16 +153,14 @@ async function getAccessToken() {
   return data.access_token;
 }
 
-// Hàm gọi Google Sheets API chung cho mọi request.
-async function googleRequest(path, options = {}) {
+async function authenticatedJsonRequest(url, options = {}) {
   if (!googleSheetsConnected()) {
     throw new Error("Google Sheets đang tạm ngắt kết nối.");
   }
 
   // Lấy access token trước khi gọi API.
   const token = await getAccessToken();
-  // Gọi Google Sheets API với Sheet ID trong env.
-  const response = await fetch(`${SHEETS_URL}/${requiredEnv("GOOGLE_SHEET_ID")}${path}`, {
+  const response = await fetch(url, {
     // Cho phép truyền method/body từ nơi gọi.
     ...options,
     // Gắn header auth và JSON.
@@ -182,13 +185,67 @@ async function googleRequest(path, options = {}) {
   return data;
 }
 
+// Hàm gọi Google Sheets API chung cho mọi request.
+async function googleRequest(path, options = {}, spreadsheetIdValue = requiredEnv("GOOGLE_SHEET_ID")) {
+  // Gọi Google Sheets API với Sheet ID được truyền vào hoặc lấy trong env.
+  return authenticatedJsonRequest(`${SHEETS_URL}/${spreadsheetIdValue}${path}`, options);
+}
+
+async function createSpreadsheet(title, sheetTitle = "Hồ sơ") {
+  return authenticatedJsonRequest(SHEETS_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      properties: {
+        title,
+        locale: "vi_VN",
+        timeZone: "Asia/Ho_Chi_Minh",
+      },
+      sheets: [{
+        properties: {
+          title: sheetTitle,
+          gridProperties: { rowCount: 1000, columnCount: 40 },
+        },
+      }],
+    }),
+  });
+}
+
+async function driveRequest(path, options = {}) {
+  return authenticatedJsonRequest(`${DRIVE_URL}${path}`, options);
+}
+
+async function shareDriveFile(fileId, emails) {
+  const recipients = Array.isArray(emails) ? emails : String(emails || "").split(",");
+  const cleanRecipients = recipients.map((email) => email.trim()).filter(Boolean);
+  const results = [];
+  for (const email of cleanRecipients) {
+    results.push(await driveRequest(`/files/${encodeURIComponent(fileId)}/permissions?sendNotificationEmail=false`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "user",
+        role: "writer",
+        emailAddress: email,
+      }),
+    }));
+  }
+  return results;
+}
+
+async function moveDriveFile(fileId, folderId) {
+  if (!folderId) return null;
+  return driveRequest(`/files/${encodeURIComponent(fileId)}?addParents=${encodeURIComponent(folderId)}&fields=id,parents`, {
+    method: "PATCH",
+    body: JSON.stringify({}),
+  });
+}
+
 function spreadsheetId() {
   return requiredEnv("GOOGLE_SHEET_ID");
 }
 
-function spreadsheetUrl(sheetId = "") {
+function spreadsheetUrl(sheetId = "", spreadsheetIdValue = spreadsheetId()) {
   const gid = sheetId === "" ? "" : `#gid=${sheetId}`;
-  return `https://docs.google.com/spreadsheets/d/${spreadsheetId()}/edit${gid}`;
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetIdValue}/edit${gid}`;
 }
 
 async function getSpreadsheetSheets() {
@@ -234,7 +291,7 @@ async function getValues(sheetName, range = "A1:Z5000") {
 }
 
 // Ghi nhiều ô/range cùng lúc bằng values API.
-async function batchUpdateValues(data) {
+async function batchUpdateValues(data, spreadsheetIdValue) {
   return googleRequest("/values:batchUpdate", {
     method: "POST",
     body: JSON.stringify({
@@ -243,15 +300,15 @@ async function batchUpdateValues(data) {
       // data là danh sách range + values cần ghi.
       data,
     }),
-  });
+  }, spreadsheetIdValue);
 }
 
 // Gọi batchUpdate nâng cao: chèn dòng, copy format, copy công thức.
-async function batchUpdate(requests) {
+async function batchUpdate(requests, spreadsheetIdValue) {
   return googleRequest(":batchUpdate", {
     method: "POST",
     body: JSON.stringify({ requests }),
-  });
+  }, spreadsheetIdValue);
 }
 
 // Lấy sheetId nội bộ của một tab dựa theo tên tab.
@@ -462,6 +519,7 @@ module.exports = {
   batchUpdateValues,
   clearValues,
   colToA1,
+  createSpreadsheet,
   dateKey,
   findHeader,
   getSheetIdByTitle,
@@ -473,6 +531,8 @@ module.exports = {
   normalizeText,
   parseNumber,
   sheetRange,
+  shareDriveFile,
+  moveDriveFile,
   spreadsheetUrl,
   toSheetDate,
   weekdayForSheet,

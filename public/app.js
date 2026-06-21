@@ -1269,6 +1269,7 @@ async function exportCustomerProfileSheet(button) {
   const originalText = button.textContent;
   button.disabled = true;
   button.textContent = "Đang đồng bộ...";
+  const sheetWindow = window.open("about:blank", "_blank");
   try {
     const response = await fetch(unitUrl(`/api/export-customer?customerCode=${encodeURIComponent(code)}&format=google-sheet`), {
       headers: authHeaders(),
@@ -1276,8 +1277,18 @@ async function exportCustomerProfileSheet(button) {
     const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không xuất được Google Sheet.");
     button.textContent = "Đã xuất Sheet";
-    if (data.url) window.open(data.url, "_blank", "noopener");
+    if (data.url) {
+      if (sheetWindow) {
+        sheetWindow.location.href = data.url;
+      } else {
+        window.open(data.url, "_blank", "noopener");
+      }
+    } else if (sheetWindow) {
+      sheetWindow.close();
+    }
+    if (data.warning) window.alert(data.warning);
   } catch (error) {
+    if (sheetWindow) sheetWindow.close();
     button.textContent = error.message;
   } finally {
     setTimeout(() => {

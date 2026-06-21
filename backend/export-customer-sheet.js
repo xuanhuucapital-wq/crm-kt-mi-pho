@@ -3,10 +3,11 @@ const { normalizeBusinessUnit, normalizeText, readDatabase, recalculate } = requ
 const {
   batchUpdate,
   batchUpdateValues,
-  clearValues,
   colToA1,
-  ensureSheet,
+  createSpreadsheet,
   jsonResponse,
+  moveDriveFile,
+  shareDriveFile,
   spreadsheetUrl,
 } = require("./_sheets");
 
@@ -28,6 +29,24 @@ function safeSheetTitle(customer) {
     .replace(/\s+/g, " ")
     .trim();
   return title.slice(0, 90) || "HS khach hang";
+}
+
+function exportTimestamp() {
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(dateParts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day} ${values.hour}-${values.minute}`;
+}
+
+function spreadsheetTitle(customer) {
+  return `Hồ sơ ${customer.MaKH} - ${customer.TenKH} - ${exportTimestamp()}`;
 }
 
 function asDate(value) {
@@ -238,6 +257,7 @@ function quantityColumnRequests(sheetId, rowStartIndex, rowCount, columnIndexes)
 }
 
 async function styleSheet({
+  spreadsheetId,
   sheetId,
   detailTitleRow,
   detailHeaderRow,
@@ -347,20 +367,23 @@ async function styleSheet({
     ...quantityColumnRequests(sheetId, detailDataStartRow - 1, Math.max(1, rowCount - detailDataStartRow + 1), quantityDetailColumns),
     ...moneyColumnRequests(sheetId, detailDataStartRow - 1, Math.max(1, rowCount - detailDataStartRow + 1), moneyDetailColumns),
     ...moneyColumnRequests(sheetId, paymentDataStartRow - 1, Math.max(1, rowCount - paymentDataStartRow + 1), [1]),
-  ]);
+  ], spreadsheetId);
 }
 
 async function syncCustomerSheet({ businessUnit, unitName, customer, orders, payments }) {
-  const title = safeSheetTitle(customer);
-  const sheetId = await ensureSheet(title);
+  const title = spreadsheetTitle(customer);
+  const tabTitle = "Hồ sơ";
+  const spreadsheet = await createSpreadsheet(title, tabTitle);
+  const spreadsheetId = spreadsheet.spreadsheetId;
+  const sheetId = spreadsheet.sheets?.[0]?.properties?.sheetId || 0;
   const sheet = buildSheetValues({ businessUnit, unitName, customer, orders, payments });
-  await clearValues(title);
   await batchUpdateValues([{
-    range: `'${title.replace(/'/g, "''")}'!A1`,
+    range: `'${tabTitle}'!A1`,
     values: sheet.rows,
-  }]);
+  }], spreadsheetId);
   const columnCount = Math.max(...sheet.rows.map((row) => row.length), 1);
   await styleSheet({
+    spreadsheetId,
     sheetId,
     detailTitleRow: sheet.detailTitleRow,
     detailHeaderRow: sheet.detailHeaderRow,
@@ -374,10 +397,22 @@ async function syncCustomerSheet({ businessUnit, unitName, customer, orders, pay
     extras: sheet.extras,
     summaryColumnCount: sheet.rows[3].length,
   });
+  const folderId = String(process.env.GOOGLE_EXPORT_FOLDER_ID || "").trim();
+  if (folderId) await moveDriveFile(spreadsheetId, folderId);
+  const shareEmails = String(process.env.GOOGLE_EXPORT_SHARE_EMAILS || process.env.GOOGLE_EXPORT_SHARE_EMAIL || "")
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
+  if (shareEmails.length) await shareDriveFile(spreadsheetId, shareEmails);
   return {
     title,
+    spreadsheetId,
     sheetId,
-    url: spreadsheetUrl(sheetId),
+    sharedWith: shareEmails,
+    url: spreadsheetUrl(sheetId, spreadsheetId),
+    warning: shareEmails.length || folderId
+      ? ""
+      : "File mới đã được tạo bởi service account. Hãy cấu hình GOOGLE_EXPORT_SHARE_EMAILS hoặc GOOGLE_EXPORT_FOLDER_ID để tài khoản của bạn mở được link.",
   };
 }
 
@@ -405,8 +440,11 @@ exports.handler = async (event) => {
     return jsonResponse(200, {
       ok: true,
       sheetTitle: result.title,
+      spreadsheetId: result.spreadsheetId,
       sheetId: result.sheetId,
+      sharedWith: result.sharedWith,
       url: result.url,
+      warning: result.warning,
     });
   } catch (error) {
     if (error.statusCode) return authErrorResponse(error);
