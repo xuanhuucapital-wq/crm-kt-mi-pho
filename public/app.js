@@ -251,8 +251,8 @@ function ensureBulkCopyUi() {
           <section class="bulk-copy-toolbar">
             <label>Lấy sản lượng từ ngày<input id="bulkCopySourceDate" type="date" required /></label>
             <label>Tạo đơn cho ngày<input id="bulkCopyTargetDate" type="date" required /></label>
-            <label>Thêm khách<select id="bulkCopyAddCustomer"></select></label>
-            <button id="bulkCopyAddCustomerButton" class="secondary-button" type="button">+ Thêm khách</button>
+            <label>Thêm đơn<select id="bulkCopyAddCustomer"></select></label>
+            <button id="bulkCopyAddCustomerButton" class="secondary-button" type="button">+ Thêm đơn</button>
             <button id="bulkCopySelectAll" class="secondary-button" type="button">Chọn tất cả</button>
           </section>
           <div class="table-wrap bulk-copy-table-wrap">
@@ -1474,6 +1474,15 @@ function updateBulkCopySelection() {
   $("#saveBulkCopy").textContent = selected ? `Tạo ${number.format(selected)} đơn đã chọn` : "Chọn khách để tạo đơn";
 }
 
+function selectOnlyBulkCopyCustomer(code) {
+  const key = normalizeVietnamese(code);
+  $$(".bulk-copy-check").forEach((input) => {
+    const row = input.closest("tr");
+    input.checked = normalizeVietnamese(row?.dataset.customerCode || "") === key;
+  });
+  updateBulkCopySelection();
+}
+
 function openBulkCopyDialog() {
   const today = todayInVietnam();
   $("#bulkCopyTargetDate").value = today;
@@ -2618,6 +2627,7 @@ if ($("#copyProductionButton") && $("#bulkCopyForm")) {
       state.bulkCopyAddedCustomerCodes.push(code);
     }
     renderBulkCopyRows();
+    selectOnlyBulkCopyCustomer(code);
   });
   $("#bulkCopyRows").addEventListener("input", updateBulkCopySelection);
   $("#bulkCopyRows").addEventListener("change", updateBulkCopySelection);
