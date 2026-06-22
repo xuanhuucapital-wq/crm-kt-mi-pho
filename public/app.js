@@ -23,6 +23,7 @@ const state = {
   explicitLogout: false,
   bulkCopyAddedCustomerCodes: [],
   bulkCopyManualDrafts: {},
+  bulkCopySourceDrafts: {},
   businessUnit: localStorage.getItem("nhapLieuBusinessUnit") || "mi",
   customerSortDirections: {
     mi: localStorage.getItem("nhapLieuCustomerSortDirection:mi") === "desc" ? "desc" : "asc",
@@ -1408,10 +1409,8 @@ function updateBulkCopyAddCustomerOptions(sourceRows = ordersForBulkCopy($("#bul
   $("#bulkCopyAddCustomerButton").disabled = !options;
 }
 
-function rememberBulkCopyManualDrafts() {
-  $$("#bulkCopyRows tr[data-customer-code]").forEach((row) => {
-    const code = row.dataset.customerCode;
-    if (!code) return;
+function rememberBulkCopyDrafts() {
+  $$("#bulkCopyRows tr[data-customer-code], #bulkCopyRows tr[data-source-id]").forEach((row) => {
     const draft = {
       checked: Boolean(row.querySelector(".bulk-copy-check")?.checked),
       values: {},
@@ -1419,7 +1418,11 @@ function rememberBulkCopyManualDrafts() {
     row.querySelectorAll("[data-field]").forEach((field) => {
       draft.values[field.dataset.field] = field.value;
     });
-    state.bulkCopyManualDrafts[normalizeVietnamese(code)] = draft;
+    if (row.dataset.customerCode) {
+      state.bulkCopyManualDrafts[normalizeVietnamese(row.dataset.customerCode)] = draft;
+    } else if (row.dataset.sourceId) {
+      state.bulkCopySourceDrafts[String(row.dataset.sourceId)] = draft;
+    }
   });
 }
 
@@ -1444,12 +1447,18 @@ function renderBulkCopyRows() {
     </tr>`;
   const sourceHtml = rows.map((order) => {
     const duplicate = duplicateOrderOnDate(order, targetDate);
+    const draft = state.bulkCopySourceDrafts[String(order.id)];
     const cells = products.map((product) => {
-      return bulkCopyQuantityCell(product, bulkCopyInputValue(order, product), order.phoSoiUnit || "kg");
+      return bulkCopyQuantityCell(
+        product,
+        draft?.values?.[product.quantity] ?? bulkCopyInputValue(order, product),
+        draft?.values?.phoSoiUnit || order.phoSoiUnit || "kg",
+      );
     }).join("");
+    const checked = draft ? draft.checked : !duplicate;
     return `
       <tr data-source-id="${order.id}">
-        <td><input class="bulk-copy-check" type="checkbox" ${duplicate ? "" : "checked"} aria-label="Chọn ${escapeHtml(order.customerName)}" /></td>
+        <td><input class="bulk-copy-check" type="checkbox" ${checked ? "checked" : ""} aria-label="Chọn ${escapeHtml(order.customerName)}" /></td>
         <td><strong>${escapeHtml(order.customerName)}</strong><small class="block">Mẫu #${order.id} · ${formatDate(order.date)}</small></td>
         ${cells}
         <td>${escapeHtml(order.truck || "—")}</td>
@@ -1494,22 +1503,13 @@ function updateBulkCopySelection() {
   $("#saveBulkCopy").textContent = selected ? `Tạo ${number.format(selected)} đơn đã chọn` : "Chọn khách để tạo đơn";
 }
 
-function selectOnlyBulkCopyCustomer(code) {
-  const key = normalizeVietnamese(code);
-  $$(".bulk-copy-check").forEach((input) => {
-    const row = input.closest("tr");
-    input.checked = normalizeVietnamese(row?.dataset.customerCode || "") === key;
-  });
-  rememberBulkCopyManualDrafts();
-  updateBulkCopySelection();
-}
-
 function openBulkCopyDialog() {
   const today = todayInVietnam();
   $("#bulkCopyTargetDate").value = today;
   $("#bulkCopySourceDate").value = latestOrderDateBefore(today);
   state.bulkCopyAddedCustomerCodes = [];
   state.bulkCopyManualDrafts = {};
+  state.bulkCopySourceDrafts = {};
   $("#bulkCopyResult").className = "notice";
   renderBulkCopyRows();
   $("#bulkCopyDialog").showModal();
@@ -2635,42 +2635,41 @@ ensureBulkCopyUi();
 if ($("#copyProductionButton") && $("#bulkCopyForm")) {
   $("#copyProductionButton").addEventListener("click", openBulkCopyDialog);
   $("#bulkCopySourceDate").addEventListener("change", () => {
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     renderBulkCopyRows();
   });
   $("#bulkCopyTargetDate").addEventListener("change", () => {
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     renderBulkCopyRows();
   });
   $("#bulkCopySelectAll").addEventListener("click", () => {
     const checks = $$(".bulk-copy-check");
     const shouldCheck = checks.some((input) => !input.checked);
     checks.forEach((input) => { input.checked = shouldCheck; });
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     updateBulkCopySelection();
   });
   $("#bulkCopyAddCustomerButton").addEventListener("click", () => {
     const code = $("#bulkCopyAddCustomer").value;
     if (!code) return;
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     if (!state.bulkCopyAddedCustomerCodes.some((item) => normalizeVietnamese(item) === normalizeVietnamese(code))) {
       state.bulkCopyAddedCustomerCodes.push(code);
     }
     renderBulkCopyRows();
-    selectOnlyBulkCopyCustomer(code);
   });
   $("#bulkCopyRows").addEventListener("input", () => {
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     updateBulkCopySelection();
   });
   $("#bulkCopyRows").addEventListener("change", () => {
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     updateBulkCopySelection();
   });
   $("#bulkCopyHead").addEventListener("change", (event) => {
     if (!event.target.matches("#bulkCopyMasterCheck")) return;
     $$(".bulk-copy-check").forEach((input) => { input.checked = event.target.checked; });
-    rememberBulkCopyManualDrafts();
+    rememberBulkCopyDrafts();
     updateBulkCopySelection();
   });
   $("#bulkCopyForm").addEventListener("submit", async (event) => {
