@@ -22,6 +22,7 @@ const state = {
   auditLog: [],
   explicitLogout: false,
   bulkCopyAddedCustomerCodes: [],
+  bulkCopyManualDrafts: {},
   businessUnit: localStorage.getItem("nhapLieuBusinessUnit") || "mi",
   customerSortDirections: {
     mi: localStorage.getItem("nhapLieuCustomerSortDirection:mi") === "desc" ? "desc" : "asc",
@@ -1407,6 +1408,21 @@ function updateBulkCopyAddCustomerOptions(sourceRows = ordersForBulkCopy($("#bul
   $("#bulkCopyAddCustomerButton").disabled = !options;
 }
 
+function rememberBulkCopyManualDrafts() {
+  $$("#bulkCopyRows tr[data-customer-code]").forEach((row) => {
+    const code = row.dataset.customerCode;
+    if (!code) return;
+    const draft = {
+      checked: Boolean(row.querySelector(".bulk-copy-check")?.checked),
+      values: {},
+    };
+    row.querySelectorAll("[data-field]").forEach((field) => {
+      draft.values[field.dataset.field] = field.value;
+    });
+    state.bulkCopyManualDrafts[normalizeVietnamese(code)] = draft;
+  });
+}
+
 function renderBulkCopyRows() {
   const sourceDate = $("#bulkCopySourceDate").value;
   const targetDate = $("#bulkCopyTargetDate").value;
@@ -1442,10 +1458,14 @@ function renderBulkCopyRows() {
   }).join("");
   const manualHtml = manualCustomers.map((customer) => {
     const duplicate = duplicateCustomerOnDate(customer.TenKH, targetDate);
-    const cells = products.map((product) => bulkCopyQuantityCell(product)).join("");
+    const draft = state.bulkCopyManualDrafts[normalizeVietnamese(customer.MaKH)];
+    const cells = products.map((product) => (
+      bulkCopyQuantityCell(product, draft?.values?.[product.quantity] || "", draft?.values?.phoSoiUnit || "kg")
+    )).join("");
+    const checked = draft ? draft.checked : !duplicate;
     return `
       <tr data-customer-code="${escapeHtml(customer.MaKH)}">
-        <td><input class="bulk-copy-check" type="checkbox" ${duplicate ? "" : "checked"} aria-label="Chọn ${escapeHtml(customer.TenKH)}" /></td>
+        <td><input class="bulk-copy-check" type="checkbox" ${checked ? "checked" : ""} aria-label="Chọn ${escapeHtml(customer.TenKH)}" /></td>
         <td><strong>${escapeHtml(customer.TenKH)}</strong><small class="block">Thêm tay · ${escapeHtml(customer.MaKH)}</small></td>
         ${cells}
         <td>${escapeHtml(customer.NhaXeMacDinh || "—")}</td>
@@ -1480,6 +1500,7 @@ function selectOnlyBulkCopyCustomer(code) {
     const row = input.closest("tr");
     input.checked = normalizeVietnamese(row?.dataset.customerCode || "") === key;
   });
+  rememberBulkCopyManualDrafts();
   updateBulkCopySelection();
 }
 
@@ -1488,6 +1509,7 @@ function openBulkCopyDialog() {
   $("#bulkCopyTargetDate").value = today;
   $("#bulkCopySourceDate").value = latestOrderDateBefore(today);
   state.bulkCopyAddedCustomerCodes = [];
+  state.bulkCopyManualDrafts = {};
   $("#bulkCopyResult").className = "notice";
   renderBulkCopyRows();
   $("#bulkCopyDialog").showModal();
@@ -2612,28 +2634,43 @@ $("#truckSuggestions").addEventListener("click", (event) => {
 ensureBulkCopyUi();
 if ($("#copyProductionButton") && $("#bulkCopyForm")) {
   $("#copyProductionButton").addEventListener("click", openBulkCopyDialog);
-  $("#bulkCopySourceDate").addEventListener("change", renderBulkCopyRows);
-  $("#bulkCopyTargetDate").addEventListener("change", renderBulkCopyRows);
+  $("#bulkCopySourceDate").addEventListener("change", () => {
+    rememberBulkCopyManualDrafts();
+    renderBulkCopyRows();
+  });
+  $("#bulkCopyTargetDate").addEventListener("change", () => {
+    rememberBulkCopyManualDrafts();
+    renderBulkCopyRows();
+  });
   $("#bulkCopySelectAll").addEventListener("click", () => {
     const checks = $$(".bulk-copy-check");
     const shouldCheck = checks.some((input) => !input.checked);
     checks.forEach((input) => { input.checked = shouldCheck; });
+    rememberBulkCopyManualDrafts();
     updateBulkCopySelection();
   });
   $("#bulkCopyAddCustomerButton").addEventListener("click", () => {
     const code = $("#bulkCopyAddCustomer").value;
     if (!code) return;
+    rememberBulkCopyManualDrafts();
     if (!state.bulkCopyAddedCustomerCodes.some((item) => normalizeVietnamese(item) === normalizeVietnamese(code))) {
       state.bulkCopyAddedCustomerCodes.push(code);
     }
     renderBulkCopyRows();
     selectOnlyBulkCopyCustomer(code);
   });
-  $("#bulkCopyRows").addEventListener("input", updateBulkCopySelection);
-  $("#bulkCopyRows").addEventListener("change", updateBulkCopySelection);
+  $("#bulkCopyRows").addEventListener("input", () => {
+    rememberBulkCopyManualDrafts();
+    updateBulkCopySelection();
+  });
+  $("#bulkCopyRows").addEventListener("change", () => {
+    rememberBulkCopyManualDrafts();
+    updateBulkCopySelection();
+  });
   $("#bulkCopyHead").addEventListener("change", (event) => {
     if (!event.target.matches("#bulkCopyMasterCheck")) return;
     $$(".bulk-copy-check").forEach((input) => { input.checked = event.target.checked; });
+    rememberBulkCopyManualDrafts();
     updateBulkCopySelection();
   });
   $("#bulkCopyForm").addEventListener("submit", async (event) => {
