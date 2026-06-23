@@ -24,6 +24,7 @@ function googleSheetsConnected() {
 
 // Đọc file .env khi chạy local bằng npm run dev.
 function loadLocalEnv() {
+  if (typeof __dirname === "undefined") return;
   // File .env thường nằm ở thư mục gốc dự án; Passenger đôi khi có cwd khác.
   const envPath = [
     path.join(process.cwd(), ".env"),
