@@ -1589,10 +1589,11 @@ async function saveBulkCopiedOrders(button) {
   const selectedRows = $$(".bulk-copy-check:checked").map((input) => input.closest("tr"));
   if (!selectedRows.length) return;
   button.disabled = true;
+  const targetDate = $("#bulkCopyTargetDate").value;
   notice($("#bulkCopyResult"), `Đang tạo ${number.format(selectedRows.length)} đơn...`);
   const errors = [];
   let created = 0;
-  for (const row of selectedRows) {
+  for (const [index, row] of selectedRows.entries()) {
     const source = state.orders.find((order) => Number(order.id) === Number(row.dataset.sourceId));
     const manualCustomer = row.dataset.customerCode ? customerForCode(row.dataset.customerCode) : null;
     try {
@@ -1607,16 +1608,22 @@ async function saveBulkCopiedOrders(button) {
     } catch (error) {
       errors.push(`${source?.customerName || manualCustomer?.TenKH || `Đơn #${row.dataset.sourceId || row.dataset.customerCode}`}: ${error.message}`);
     }
+    notice($("#bulkCopyResult"), `Đã xử lý ${number.format(index + 1)}/${number.format(selectedRows.length)} đơn...`);
   }
-  await loadCrm();
   if (errors.length) {
     notice($("#bulkCopyResult"), `Đã tạo ${number.format(created)} đơn, ${number.format(errors.length)} đơn lỗi: ${errors.join("; ")}`, "error");
     button.disabled = false;
     updateBulkCopySelection();
     return;
   }
-  notice($("#result"), `Đã copy sản lượng và tạo ${number.format(created)} đơn cho ngày ${formatDate($("#bulkCopyTargetDate").value)}.`);
+  notice($("#bulkCopyResult"), `Đã tạo xong ${number.format(created)} đơn. Đang tải lại dữ liệu CRM...`);
+  notice($("#result"), `Đã copy sản lượng và tạo ${number.format(created)} đơn cho ngày ${formatDate(targetDate)}.`);
   $("#bulkCopyDialog").close();
+  try {
+    await loadCrm();
+  } catch (error) {
+    notice($("#result"), `Đã tạo ${number.format(created)} đơn, nhưng chưa tải lại được dữ liệu CRM: ${error.message}`, "error");
+  }
 }
 
 function calculateEditOrder() {
@@ -2135,23 +2142,28 @@ function renderAll() {
 
 async function loadCrm() {
   $("#syncStatus").textContent = "Đang tải dữ liệu CRM...";
-  const isManager = state.user?.role === "manager";
-  const crmResponse = await fetch(unitUrl(isManager ? "/api/crm?include=manager" : "/api/crm"), { headers: authHeaders() });
-  const crmData = await readApiResponse(crmResponse);
-  if (!crmResponse.ok) throw new Error(crmData.error || "Không tải được database CRM.");
-  state.customers = crmData.customers || [];
-  state.orders = (crmData.orders || []).sort(newestOrderFirst);
-  state.productionInfo = crmData.productionInfo?.entries || [];
-  state.productionInfoTitle = crmData.productionInfo?.title || "";
-  state.summary = crmData.summary || {};
-  state.payments = crmData.payments || [];
-  state.users = crmData.users || [];
-  state.auditLog = crmData.auditLog || [];
-  state.offlineCrm = false;
-  normalizeCrmFinancials();
-  recalculateCrmTotals();
-  renderAll();
-  $("#syncStatus").textContent = `Database CRM · ${currentUnit().name}`;
+  try {
+    const isManager = state.user?.role === "manager";
+    const crmResponse = await fetch(unitUrl(isManager ? "/api/crm?include=manager" : "/api/crm"), { headers: authHeaders() });
+    const crmData = await readApiResponse(crmResponse);
+    if (!crmResponse.ok) throw new Error(crmData.error || "Không tải được database CRM.");
+    state.customers = crmData.customers || [];
+    state.orders = (crmData.orders || []).sort(newestOrderFirst);
+    state.productionInfo = crmData.productionInfo?.entries || [];
+    state.productionInfoTitle = crmData.productionInfo?.title || "";
+    state.summary = crmData.summary || {};
+    state.payments = crmData.payments || [];
+    state.users = crmData.users || [];
+    state.auditLog = crmData.auditLog || [];
+    state.offlineCrm = false;
+    normalizeCrmFinancials();
+    recalculateCrmTotals();
+    renderAll();
+    $("#syncStatus").textContent = `Database CRM · ${currentUnit().name}`;
+  } catch (error) {
+    $("#syncStatus").textContent = `Lỗi tải CRM · ${currentUnit().name}`;
+    throw error;
+  }
 }
 
 function selectedCustomer() {
