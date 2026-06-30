@@ -1,3 +1,30 @@
+// Theme management — attribute lives on <html> so inline head script can set it before paint
+function applyThemeToggleIcon() {
+  const btn = document.getElementById("themeToggleButton");
+  if (!btn) return;
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  btn.textContent = isDark ? "☀" : "☾";
+  btn.title = isDark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  applyThemeToggleIcon();
+  const btn = document.getElementById("themeToggleButton");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      if (isDark) {
+        document.documentElement.removeAttribute("data-theme");
+        localStorage.setItem("nhapLieuTheme", "light");
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+        localStorage.setItem("nhapLieuTheme", "dark");
+      }
+      applyThemeToggleIcon();
+    });
+  }
+});
+
 const state = {
   token: localStorage.getItem("nhapLieuAuthToken") || "",
   user: null,
