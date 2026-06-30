@@ -27,7 +27,7 @@ exports.handler = async (event) => {
       return jsonResponse(400, { error: "Số tiền thanh toán vượt quá giới hạn cho phép." });
     }
     const customerCode = boundedString(payload.customerCode, "mã khách", 50, { required: true });
-    const payment = await updateDatabase((database) => {
+    const result = await updateDatabase((database) => {
       const customer = database.crm.customers.find(
         (item) => normalizeBusinessUnit(item.businessUnit) === businessUnit
           && normalizeText(item.MaKH) === normalizeText(customerCode),
@@ -47,6 +47,7 @@ exports.handler = async (event) => {
       if (amount > debt) throw new Error(`Số tiền vượt quá công nợ ${debt.toLocaleString("vi-VN")} ₫.`);
       let remaining = amount;
       const allocations = [];
+      const affectedOrders = [];
       orders.forEach((order) => {
         if (remaining <= 0) return;
         const applied = Math.min(remaining, order.debt);
@@ -54,6 +55,7 @@ exports.handler = async (event) => {
         order.debt -= applied;
         remaining -= applied;
         allocations.push({ orderId: order.id, amount: applied });
+        affectedOrders.push(order);
       });
       const payments = database.payments || (database.payments = []);
       const created = {
@@ -85,9 +87,9 @@ exports.handler = async (event) => {
           allocations,
         },
       });
-      return created;
+      return { payment: created, customer, orders: affectedOrders };
     });
-    return jsonResponse(201, { ok: true, payment });
+    return jsonResponse(201, { ok: true, ...result });
   } catch (error) {
     if (error.statusCode) return authErrorResponse(error);
     return jsonResponse(400, { error: error.message });

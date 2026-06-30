@@ -235,32 +235,58 @@ function recalculate(database) {
   const crm = database.crm || (database.crm = {});
   const orders = crm.orders || (crm.orders = []);
   const customers = crm.customers || (crm.customers = []);
-  orders.forEach(normalizeOrder);
+  const customerTotals = new Map();
+  const summaries = Object.fromEntries(BUSINESS_UNITS.map((businessUnit) => [businessUnit, {
+    customerCount: 0,
+    orderCount: 0,
+    revenue: 0,
+    paid: 0,
+    debt: 0,
+    tax: 0,
+    advance: 0,
+  }]));
+
   customers.forEach((customer) => {
     const businessUnit = normalizeBusinessUnit(customer.businessUnit);
-    const customerOrders = orders.filter((order) => (
-      normalizeBusinessUnit(order.businessUnit) === businessUnit
-      && normalizeText(order.customerName) === normalizeText(customer.TenKH)
-    ));
-    customer.orderCount = customerOrders.length;
-    customer.revenue = customerOrders.reduce((sum, order) => sum + order.subtotal, 0);
-    customer.paid = customerOrders.reduce((sum, order) => sum + order.paid, 0);
-    customer.debt = customerOrders.reduce((sum, order) => sum + order.debt, 0);
-    customer.lastOrderDate = customerOrders.map((order) => order.date).filter(Boolean).sort().at(-1) || "";
+    customer.businessUnit = businessUnit;
+    summaries[businessUnit].customerCount += 1;
+    customerTotals.set(`${businessUnit}|${normalizeText(customer.TenKH)}`, {
+      orderCount: 0,
+      revenue: 0,
+      paid: 0,
+      debt: 0,
+      lastOrderDate: "",
+    });
   });
-  crm.summaries = Object.fromEntries(BUSINESS_UNITS.map((businessUnit) => {
-    const unitCustomers = customers.filter((customer) => customer.businessUnit === businessUnit);
-    const unitOrders = orders.filter((order) => order.businessUnit === businessUnit);
-    return [businessUnit, {
-      customerCount: unitCustomers.length,
-      orderCount: unitOrders.length,
-      revenue: unitOrders.reduce((sum, order) => sum + order.subtotal, 0),
-      paid: unitOrders.reduce((sum, order) => sum + order.paid, 0),
-      debt: unitOrders.reduce((sum, order) => sum + order.debt, 0),
-      tax: unitOrders.reduce((sum, order) => sum + order.taxAmount, 0),
-      advance: unitOrders.reduce((sum, order) => sum + order.advance, 0),
-    }];
-  }));
+
+  orders.forEach(normalizeOrder);
+  orders.forEach((order) => {
+    const businessUnit = normalizeBusinessUnit(order.businessUnit);
+    order.businessUnit = businessUnit;
+    const summary = summaries[businessUnit];
+    summary.orderCount += 1;
+    summary.revenue += Number(order.subtotal || 0);
+    summary.paid += Number(order.paid || 0);
+    summary.debt += Number(order.debt || 0);
+    summary.tax += Number(order.taxAmount || 0);
+    summary.advance += Number(order.advance || 0);
+    const totals = customerTotals.get(`${businessUnit}|${normalizeText(order.customerName)}`);
+    if (!totals) return;
+    totals.orderCount += 1;
+    totals.revenue += Number(order.subtotal || 0);
+    totals.paid += Number(order.paid || 0);
+    totals.debt += Number(order.debt || 0);
+    if (order.date && order.date > totals.lastOrderDate) totals.lastOrderDate = order.date;
+  });
+  customers.forEach((customer) => {
+    const totals = customerTotals.get(`${customer.businessUnit}|${normalizeText(customer.TenKH)}`) || {};
+    customer.orderCount = totals.orderCount || 0;
+    customer.revenue = totals.revenue || 0;
+    customer.paid = totals.paid || 0;
+    customer.debt = totals.debt || 0;
+    customer.lastOrderDate = totals.lastOrderDate || "";
+  });
+  crm.summaries = summaries;
   crm.summary = crm.summaries.mi;
 }
 

@@ -1658,25 +1658,17 @@ async function saveBulkCopiedOrders(button) {
     const errors = Array.isArray(data.errors) ? data.errors : [];
     if (errors.length) {
       const errorText = errors.map((item) => `${item.label || "Đơn"}: ${item.error || "Không tạo được đơn."}`).join("; ");
-      notice($("#bulkCopyResult"), `Đã tạo ${number.format(created)} đơn, ${number.format(errors.length)} đơn lỗi: ${errorText}. Đang tải lại CRM để kiểm tra đơn đã ghi...`, "error");
-      try {
-        await loadCrm();
-      } catch (error) {
-        notice($("#result"), `Đã tạo ${number.format(created)} đơn, nhưng chưa tải lại được dữ liệu CRM: ${error.message}`, "error");
-      }
+      notice($("#bulkCopyResult"), `Đã tạo ${number.format(created)} đơn, ${number.format(errors.length)} đơn lỗi: ${errorText}. Đang cập nhật màn hình...`, "error");
+      applyLocalCrmPatch({ orders: data.orders || [] });
       button.disabled = false;
       button.textContent = originalText;
       updateBulkCopySelection();
       return;
     }
-    notice($("#bulkCopyResult"), `Đã tạo xong ${number.format(created)} đơn. Đang tải lại dữ liệu CRM...`);
+    notice($("#bulkCopyResult"), `Đã tạo xong ${number.format(created)} đơn. Đang cập nhật màn hình...`);
     notice($("#result"), `Đã copy sản lượng và tạo ${number.format(created)} đơn cho ngày ${formatDate(targetDate)}.`);
     $("#bulkCopyDialog").close();
-    try {
-      await loadCrm();
-    } catch (error) {
-      notice($("#result"), `Đã tạo ${number.format(created)} đơn, nhưng chưa tải lại được dữ liệu CRM: ${error.message}`, "error");
-    }
+    applyLocalCrmPatch({ orders: data.orders || [] });
   } catch (error) {
     notice($("#bulkCopyResult"), error.message, "error");
     button.disabled = false;
@@ -2225,6 +2217,45 @@ async function loadCrm() {
   }
 }
 
+function upsertByKey(items, item, key) {
+  if (!item || item[key] === undefined || item[key] === null) return;
+  const index = items.findIndex((current) => String(current[key]) === String(item[key]));
+  if (index >= 0) {
+    items[index] = { ...items[index], ...item };
+  } else {
+    items.push(item);
+  }
+}
+
+function upsertCustomer(customer) {
+  if (!customer?.MaKH) return;
+  const index = state.customers.findIndex((item) => normalizeVietnamese(item.MaKH) === normalizeVietnamese(customer.MaKH));
+  if (index >= 0) {
+    state.customers[index] = { ...state.customers[index], ...customer };
+  } else {
+    state.customers.push(customer);
+  }
+}
+
+function applyLocalCrmPatch(patch = {}) {
+  (patch.orders || []).forEach((order) => upsertByKey(state.orders, order, "id"));
+  (patch.customers || []).forEach(upsertCustomer);
+  if (patch.customer) upsertCustomer(patch.customer);
+  (patch.payments || []).forEach((payment) => upsertByKey(state.payments, payment, "id"));
+  if (patch.payment) upsertByKey(state.payments, patch.payment, "id");
+  state.orders.sort(newestOrderFirst);
+  normalizeCrmFinancials();
+  recalculateCrmTotals();
+  renderAll();
+  $("#syncStatus").textContent = `Database CRM · ${currentUnit().name}`;
+}
+
+function refreshOpenCustomerProfile() {
+  if ($("#customerProfileDialog").open && state.profileCustomerName) {
+    openCustomerProfile(state.profileCustomerCode, state.profileCustomerName);
+  }
+}
+
 function selectedCustomer() {
   return state.customers.find((item) => item.MaKH === $("#customerCode").value);
 }
@@ -2612,7 +2643,7 @@ async function saveChatOrder(button) {
     if (!response.ok) throw new Error(data.error || "Không ghi được đơn hàng.");
     addChatMessage(`<p>Đã ghi đơn cho <strong>${escapeHtml(data.customerName)}</strong>.</p><small>Tiền hàng và công nợ đã cập nhật trong database CRM.</small>`, "success");
     state.pendingChatOrder = null;
-    await loadCrm();
+    applyLocalCrmPatch({ orders: [data.order] });
   } catch (error) {
     addChatMessage(`<p>${escapeHtml(error.message)}</p>`, "error");
     button.disabled = false;
@@ -2776,7 +2807,7 @@ $("#orderForm").addEventListener("submit", async (event) => {
     $("#truckSuggestions").classList.add("hidden");
     $("#truckSuggestions").innerHTML = "";
     applyRestingState();
-    await loadCrm();
+    applyLocalCrmPatch({ orders: [data.order] });
   } catch (error) {
     notice($("#result"), error.message, "error");
   } finally {
@@ -2945,10 +2976,8 @@ $("#orderEditForm").addEventListener("submit", async (event) => {
         ? `Đã tạo đơn #${data.rowNumber} từ bản sao và giữ nguyên đơn gốc.`
         : `Đã cập nhật giao dịch #${data.rowNumber}.`,
     );
-    await loadCrm();
-    if ($("#customerProfileDialog").open && state.profileCustomerName) {
-      openCustomerProfile(state.profileCustomerCode, state.profileCustomerName);
-    }
+    applyLocalCrmPatch({ orders: [data.order] });
+    refreshOpenCustomerProfile();
     setTimeout(() => $("#orderEditDialog").close(), 450);
   } catch (error) {
     notice($("#orderEditResult"), error.message, "error");
@@ -2978,10 +3007,8 @@ $("#paymentForm").addEventListener("submit", async (event) => {
     const data = await readApiResponse(response);
     if (!response.ok) throw new Error(data.error || "Không cập nhật được thanh toán.");
     notice($("#paymentResult"), `Đã ghi nhận thanh toán ${money.format(amount)}.`);
-    await loadCrm();
-    if ($("#customerProfileDialog").open && state.profileCustomerName) {
-      openCustomerProfile(state.profileCustomerCode, state.profileCustomerName);
-    }
+    applyLocalCrmPatch(data);
+    refreshOpenCustomerProfile();
     setTimeout(() => $("#paymentDialog").close(), 500);
   } catch (error) {
     notice($("#paymentResult"), error.message, "error");
