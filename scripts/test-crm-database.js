@@ -124,6 +124,34 @@ async function main() {
     taxRate: 0,
     ghiChu: "Bản sao phở đã điều chỉnh",
   });
+  const bulkOrders = await call(orders.handler, "POST", {
+    action: "bulk-create",
+    businessUnit: "mi",
+    orders: [
+      {
+        action: "copy",
+        sourceOrderId: createdOrder.order.id,
+        orderDate: "2026-06-17",
+        miKg: 2,
+        caoKg: 0,
+        hoanhKg: 0,
+        tienUng: 0,
+        taxRate: 0,
+        ghiChu: "Batch copy",
+        bulkLabel: "Batch copy",
+      },
+      {
+        customerCode: "TEST-CRM",
+        orderDate: "2026-06-18",
+        miKg: 1,
+        caoKg: 0,
+        hoanhKg: 0,
+        tienUng: 0,
+        taxRate: 0,
+        bulkLabel: "Batch manual",
+      },
+    ],
+  });
   await call(payments.handler, "POST", {
     customerCode: "TEST-CRM",
     amount: 100000,
@@ -265,18 +293,31 @@ async function main() {
   token = managerToken;
   const passed = (
     after.customers.length === before.customers.length + 1
-    && after.orders.length === before.orders.length + 2
+    && after.orders.length === before.orders.length + 4
     && order.subtotal === 694000
     && order.total === 743700
     && order.paid === 100000
     && order.debt === 643700
-    && customer.debt === 873700
+    && customer.debt === 1056700
     && copiedMiOrder.order.date === "2026-06-15"
     && copiedMiOrder.order.miKg === 3
     && copiedMiOrder.order.caoKg === 1
     && copiedMiOrder.order.total === 230000
     && copiedMiOrder.order.paid === 0
     && copiedMiOrder.order.copiedFromOrderId === createdOrder.order.id
+    && bulkOrders.created === 2
+    && bulkOrders.errors.length === 0
+    && bulkOrders.orders.some((item) => (
+      item.date === "2026-06-17"
+      && item.miKg === 2
+      && item.total === 122000
+      && item.copiedFromOrderId === createdOrder.order.id
+    ))
+    && bulkOrders.orders.some((item) => (
+      item.date === "2026-06-18"
+      && item.miKg === 1
+      && item.total === 61000
+    ))
     && paymentData.payments.some((item) => item.customerCode === "TEST-CRM")
     && ["user-logout", "customer-created", "customer-updated", "order-created", "order-deleted", "payment-recorded", "production-info-created", "production-info-updated"]
       .every((action) => actionNames.has(action))
@@ -356,6 +397,7 @@ async function main() {
     phoOrder: createdPhoOrder.order,
     copiedMiOrder: copiedMiOrder.order,
     copiedPhoOrder: copiedPhoOrder.order,
+    bulkOrders,
     phoExportSheet: phoSheet?.name,
   }, null, 2));
   process.exit(passed ? 0 : 1);

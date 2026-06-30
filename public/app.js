@@ -62,7 +62,7 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
-const bulkCopyOrderTimeoutMs = 25000;
+const bulkCopyBatchTimeoutMs = 60000;
 const customerNameCollator = new Intl.Collator("vi", {
   sensitivity: "base",
   numeric: true,
@@ -1634,48 +1634,54 @@ async function saveBulkCopiedOrders(button) {
   button.disabled = true;
   const originalText = button.textContent;
   const targetDate = $("#bulkCopyTargetDate").value;
-  notice($("#bulkCopyResult"), `Đang tạo ${number.format(selectedRows.length)} đơn...`);
-  const errors = [];
-  let created = 0;
-  for (const [index, row] of selectedRows.entries()) {
+  const orders = selectedRows.map((row) => {
     const source = state.orders.find((order) => Number(order.id) === Number(row.dataset.sourceId));
     const manualCustomer = row.dataset.customerCode ? customerForCode(row.dataset.customerCode) : null;
-    const label = source?.customerName || manualCustomer?.TenKH || `Đơn #${row.dataset.sourceId || row.dataset.customerCode}`;
-    button.textContent = `Đang tạo ${number.format(index + 1)}/${number.format(selectedRows.length)}`;
-    notice($("#bulkCopyResult"), `Đang tạo ${number.format(index + 1)}/${number.format(selectedRows.length)}: ${label}...`);
-    try {
-      const response = await fetchWithTimeout("/api/orders", {
-        method: "POST",
-        headers: authHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify(bulkCopyPayloadFromRow(row)),
-      }, bulkCopyOrderTimeoutMs);
-      const data = await readApiResponse(response);
-      if (!response.ok) throw new Error(data.error || "Không tạo được đơn.");
-      created += 1;
-    } catch (error) {
-      errors.push(`${label}: ${error.message}`);
+    const bulkLabel = source?.customerName || manualCustomer?.TenKH || `Đơn #${row.dataset.sourceId || row.dataset.customerCode}`;
+    return { ...bulkCopyPayloadFromRow(row), bulkLabel };
+  });
+  button.textContent = `Đang tạo ${number.format(selectedRows.length)} đơn`;
+  notice($("#bulkCopyResult"), `Đang gửi ${number.format(selectedRows.length)} đơn lên server trong một lần...`);
+  try {
+    const response = await fetchWithTimeout("/api/orders", {
+      method: "POST",
+      headers: authHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({
+        action: "bulk-create",
+        businessUnit: state.businessUnit,
+        orders,
+      }),
+    }, bulkCopyBatchTimeoutMs);
+    const data = await readApiResponse(response);
+    if (!response.ok && response.status !== 207) throw new Error(data.error || "Không tạo được danh sách đơn.");
+    const created = Number(data.created || 0);
+    const errors = Array.isArray(data.errors) ? data.errors : [];
+    if (errors.length) {
+      const errorText = errors.map((item) => `${item.label || "Đơn"}: ${item.error || "Không tạo được đơn."}`).join("; ");
+      notice($("#bulkCopyResult"), `Đã tạo ${number.format(created)} đơn, ${number.format(errors.length)} đơn lỗi: ${errorText}. Đang tải lại CRM để kiểm tra đơn đã ghi...`, "error");
+      try {
+        await loadCrm();
+      } catch (error) {
+        notice($("#result"), `Đã tạo ${number.format(created)} đơn, nhưng chưa tải lại được dữ liệu CRM: ${error.message}`, "error");
+      }
+      button.disabled = false;
+      button.textContent = originalText;
+      updateBulkCopySelection();
+      return;
     }
-    notice($("#bulkCopyResult"), `Đã xử lý ${number.format(index + 1)}/${number.format(selectedRows.length)} đơn...`);
-  }
-  if (errors.length) {
-    notice($("#bulkCopyResult"), `Đã tạo ${number.format(created)} đơn, ${number.format(errors.length)} đơn lỗi: ${errors.join("; ")}. Đang tải lại CRM để kiểm tra đơn đã ghi...`, "error");
+    notice($("#bulkCopyResult"), `Đã tạo xong ${number.format(created)} đơn. Đang tải lại dữ liệu CRM...`);
+    notice($("#result"), `Đã copy sản lượng và tạo ${number.format(created)} đơn cho ngày ${formatDate(targetDate)}.`);
+    $("#bulkCopyDialog").close();
     try {
       await loadCrm();
     } catch (error) {
       notice($("#result"), `Đã tạo ${number.format(created)} đơn, nhưng chưa tải lại được dữ liệu CRM: ${error.message}`, "error");
     }
+  } catch (error) {
+    notice($("#bulkCopyResult"), error.message, "error");
     button.disabled = false;
     button.textContent = originalText;
     updateBulkCopySelection();
-    return;
-  }
-  notice($("#bulkCopyResult"), `Đã tạo xong ${number.format(created)} đơn. Đang tải lại dữ liệu CRM...`);
-  notice($("#result"), `Đã copy sản lượng và tạo ${number.format(created)} đơn cho ngày ${formatDate(targetDate)}.`);
-  $("#bulkCopyDialog").close();
-  try {
-    await loadCrm();
-  } catch (error) {
-    notice($("#result"), `Đã tạo ${number.format(created)} đơn, nhưng chưa tải lại được dữ liệu CRM: ${error.message}`, "error");
   }
 }
 

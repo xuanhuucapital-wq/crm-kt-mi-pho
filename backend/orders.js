@@ -100,6 +100,138 @@ function applyPayload(order, payload, businessUnit, options = {}) {
   return order;
 }
 
+function createCopiedOrder(database, payload, businessUnit, sessionUser) {
+  const source = database.crm.orders.find(
+    (item) => Number(item.id) === Number(payload.sourceOrderId)
+      && normalizeBusinessUnit(item.businessUnit) === businessUnit,
+  );
+  if (!source) throw new Error("Không tìm thấy đơn hàng cần copy.");
+  const created = {
+    ...source,
+    id: nextId(database.crm.orders),
+    paymentMethod: "debt",
+    paid: 0,
+    debt: 0,
+    copiedFromOrderId: source.id,
+    createdAt: new Date().toISOString(),
+    createdByUserId: sessionUser.id,
+    createdByEmail: sessionUser.email,
+  };
+  if (payload.useCustomerPrices) {
+    const customer = database.crm.customers.find((item) => (
+      normalizeBusinessUnit(item.businessUnit) === businessUnit
+      && normalizeText(item.TenKH) === normalizeText(source.customerName)
+    ));
+    if (customer) {
+      created.priceMi = Number(customer.GiaMi || 0);
+      created.priceCao = Number(customer.GiaCao || 0);
+      created.priceHoanh = Number(customer.GiaHoanh || 0);
+      created.pricePhoSoi = Number(customer.GiaPhoSoi || 0);
+      created.pricePhoCuon = Number(customer.GiaPhoCuon || 0);
+    }
+  }
+  applyPayload(created, {
+    ...payload,
+    orderDate: payload.orderDate || todayInVietnam(),
+    paid: 0,
+    paymentMethod: "debt",
+    ghiChu: payload.ghiChu === undefined ? copiedNote(source.note) : payload.ghiChu,
+  }, businessUnit);
+  created.paymentMethod = "debt";
+  created.paid = 0;
+  normalizeOrder(created);
+  database.crm.orders.push(created);
+  appendAudit(database, {
+    action: "order-copied",
+    actorUserId: sessionUser.id,
+    actorEmail: sessionUser.email,
+    actorName: sessionUser.displayName,
+    targetOrderId: created.id,
+    summary: `${sessionUser.displayName} copy đơn #${source.id} thành #${created.id}.`,
+    businessUnit,
+    details: {
+      copiedFromOrderId: source.id,
+      customerName: created.customerName,
+      date: created.date,
+      total: created.total,
+    },
+  });
+  return created;
+}
+
+function createCustomerOrder(database, payload, businessUnit, sessionUser) {
+  const customer = database.crm.customers.find(
+    (item) => normalizeBusinessUnit(item.businessUnit) === businessUnit
+      && normalizeText(item.MaKH) === normalizeText(payload.customerCode),
+  );
+  if (!customer) throw new Error("Không tìm thấy khách hàng.");
+  const orders = database.crm.orders;
+  const created = {
+    id: nextId(orders),
+    customerName: customer.TenKH,
+    priceMi: Number(customer.GiaMi || 0),
+    priceCao: Number(customer.GiaCao || 0),
+    priceHoanh: Number(customer.GiaHoanh || 0),
+    pricePhoSoi: Number(customer.GiaPhoSoi || 0),
+    pricePhoCuon: Number(customer.GiaPhoCuon || 0),
+    businessUnit,
+    paid: 0,
+    createdAt: new Date().toISOString(),
+    createdByUserId: sessionUser.id,
+    createdByEmail: sessionUser.email,
+  };
+  applyPayload(created, {
+    ...payload,
+    nhaXe: payload.nhaXe || customer.NhaXeMacDinh || "",
+    taxRate: payload.taxRate ?? customer.ThueSuat ?? 0,
+  }, businessUnit);
+  orders.push(created);
+  appendAudit(database, {
+    action: "order-created",
+    actorUserId: sessionUser.id,
+    actorEmail: sessionUser.email,
+    actorName: sessionUser.displayName,
+    targetOrderId: created.id,
+    summary: `${sessionUser.displayName} tạo đơn #${created.id} cho ${created.customerName}.`,
+    businessUnit,
+    details: {
+      customerName: created.customerName,
+      date: created.date,
+      miKg: created.miKg,
+      caoKg: created.caoKg,
+      hoanhKg: created.hoanhKg,
+      phoSoiKg: created.phoSoiKg,
+      phoCuonKg: created.phoCuonKg,
+      total: created.total,
+      paymentMethod: created.paymentMethod,
+    },
+  });
+  if (created.total > 0 && created.paymentMethod !== "debt") {
+    const payments = database.payments || (database.payments = []);
+    payments.unshift({
+      id: nextId(payments),
+      customerCode: customer.MaKH,
+      customerName: customer.TenKH,
+      amount: created.total,
+      date: created.date,
+      method: created.paymentMethod,
+      note: created.paymentMethod === "cash"
+        ? "Thanh toán tiền mặt khi tạo đơn."
+        : "Chuyển khoản khi tạo đơn.",
+      allocations: [{ orderId: created.id, amount: created.total }],
+      businessUnit,
+      createdAt: new Date().toISOString(),
+    });
+  }
+  return created;
+}
+
+function createOrderFromPayload(database, payload, businessUnit, sessionUser) {
+  return payload.action === "copy"
+    ? createCopiedOrder(database, payload, businessUnit, sessionUser)
+    : createCustomerOrder(database, payload, businessUnit, sessionUser);
+}
+
 exports.handler = async (event) => {
   if (!["POST", "PUT", "DELETE"].includes(event.httpMethod)) {
     return jsonResponse(405, { error: "Method not allowed" });
@@ -172,129 +304,36 @@ exports.handler = async (event) => {
       if (sessionUser.role === "delivery" && payload.action === "copy") {
         return jsonResponse(403, { error: "Tài khoản giao hàng không được copy giao dịch cũ." });
       }
-      const order = await updateDatabase((database) => {
-        if (payload.action === "copy") {
-          const source = database.crm.orders.find(
-            (item) => Number(item.id) === Number(payload.sourceOrderId)
-              && normalizeBusinessUnit(item.businessUnit) === businessUnit,
-          );
-          if (!source) throw new Error("Không tìm thấy đơn hàng cần copy.");
-          const created = {
-            ...source,
-            id: nextId(database.crm.orders),
-            paymentMethod: "debt",
-            paid: 0,
-            debt: 0,
-            copiedFromOrderId: source.id,
-            createdAt: new Date().toISOString(),
-            createdByUserId: sessionUser.id,
-            createdByEmail: sessionUser.email,
-          };
-          if (payload.useCustomerPrices) {
-            const customer = database.crm.customers.find((item) => (
-              normalizeBusinessUnit(item.businessUnit) === businessUnit
-              && normalizeText(item.TenKH) === normalizeText(source.customerName)
-            ));
-            if (customer) {
-              created.priceMi = Number(customer.GiaMi || 0);
-              created.priceCao = Number(customer.GiaCao || 0);
-              created.priceHoanh = Number(customer.GiaHoanh || 0);
-              created.pricePhoSoi = Number(customer.GiaPhoSoi || 0);
-              created.pricePhoCuon = Number(customer.GiaPhoCuon || 0);
+      if (payload.action === "bulk-create") {
+        const items = Array.isArray(payload.orders) ? payload.orders : [];
+        if (!items.length) return jsonResponse(400, { error: "Chưa có đơn nào để tạo." });
+        if (items.length > 50) return jsonResponse(400, { error: "Chỉ được tạo tối đa 50 đơn mỗi lần." });
+        if (sessionUser.role === "delivery" && items.some((item) => item?.action === "copy")) {
+          return jsonResponse(403, { error: "Tài khoản giao hàng không được copy giao dịch cũ." });
+        }
+        const result = await updateDatabase((database) => {
+          const created = [];
+          const errors = [];
+          items.forEach((item, index) => {
+            const itemPayload = { ...(item || {}), businessUnit };
+            const label = String(itemPayload.bulkLabel || `Đơn ${index + 1}`).slice(0, 150);
+            try {
+              created.push(createOrderFromPayload(database, itemPayload, businessUnit, sessionUser));
+            } catch (error) {
+              errors.push({ index, label, error: error.message });
             }
-          }
-          applyPayload(created, {
-            ...payload,
-            orderDate: payload.orderDate || todayInVietnam(),
-            paid: 0,
-            paymentMethod: "debt",
-            ghiChu: payload.ghiChu === undefined ? copiedNote(source.note) : payload.ghiChu,
-          }, businessUnit);
-          created.paymentMethod = "debt";
-          created.paid = 0;
-          normalizeOrder(created);
-          database.crm.orders.push(created);
-          appendAudit(database, {
-            action: "order-copied",
-            actorUserId: sessionUser.id,
-            actorEmail: sessionUser.email,
-            actorName: sessionUser.displayName,
-            targetOrderId: created.id,
-            summary: `${sessionUser.displayName} copy đơn #${source.id} thành #${created.id}.`,
-            businessUnit,
-            details: {
-              copiedFromOrderId: source.id,
-              customerName: created.customerName,
-              date: created.date,
-              total: created.total,
-            },
           });
-          return created;
-        }
-        const customer = database.crm.customers.find(
-          (item) => normalizeBusinessUnit(item.businessUnit) === businessUnit
-            && normalizeText(item.MaKH) === normalizeText(payload.customerCode),
-        );
-        if (!customer) throw new Error("Không tìm thấy khách hàng.");
-        const orders = database.crm.orders;
-        const created = {
-          id: nextId(orders),
-          customerName: customer.TenKH,
-          priceMi: Number(customer.GiaMi || 0),
-          priceCao: Number(customer.GiaCao || 0),
-          priceHoanh: Number(customer.GiaHoanh || 0),
-          pricePhoSoi: Number(customer.GiaPhoSoi || 0),
-          pricePhoCuon: Number(customer.GiaPhoCuon || 0),
-          businessUnit,
-          paid: 0,
-          createdAt: new Date().toISOString(),
-          createdByUserId: sessionUser.id,
-          createdByEmail: sessionUser.email,
-        };
-        applyPayload(created, {
-          ...payload,
-          nhaXe: payload.nhaXe || customer.NhaXeMacDinh || "",
-          taxRate: payload.taxRate ?? customer.ThueSuat ?? 0,
-        }, businessUnit);
-        orders.push(created);
-        appendAudit(database, {
-          action: "order-created",
-          actorUserId: sessionUser.id,
-          actorEmail: sessionUser.email,
-          actorName: sessionUser.displayName,
-          targetOrderId: created.id,
-          summary: `${sessionUser.displayName} tạo đơn #${created.id} cho ${created.customerName}.`,
-          businessUnit,
-          details: {
-            customerName: created.customerName,
-            date: created.date,
-            miKg: created.miKg,
-            caoKg: created.caoKg,
-            hoanhKg: created.hoanhKg,
-            phoSoiKg: created.phoSoiKg,
-            phoCuonKg: created.phoCuonKg,
-            total: created.total,
-            paymentMethod: created.paymentMethod,
-          },
+          return { created, errors };
         });
-        if (created.total > 0 && created.paymentMethod !== "debt") {
-          const payments = database.payments || (database.payments = []);
-          payments.unshift({
-            id: nextId(payments),
-            customerCode: customer.MaKH,
-            customerName: customer.TenKH,
-            amount: created.total,
-            date: created.date,
-            method: created.paymentMethod,
-            note: created.paymentMethod === "cash"
-              ? "Thanh toán tiền mặt khi tạo đơn."
-              : "Chuyển khoản khi tạo đơn.",
-            allocations: [{ orderId: created.id, amount: created.total }],
-            businessUnit,
-            createdAt: new Date().toISOString(),
-          });
-        }
-        return created;
+        return jsonResponse(result.errors.length ? 207 : 201, {
+          ok: result.errors.length === 0,
+          created: result.created.length,
+          errors: result.errors,
+          orders: result.created,
+        });
+      }
+      const order = await updateDatabase((database) => {
+        return createOrderFromPayload(database, payload, businessUnit, sessionUser);
       });
       return jsonResponse(201, {
         ok: true,
