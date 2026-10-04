@@ -13,3 +13,9 @@ public/crm-snapshot.json
 outputs/
 *.xlsx
 *.bak
+.vercel
+.env*
+.agents/
+skills-lock.json
+anh-ban-giao/
+ghi-am-giong-noi/

@@ -182,7 +182,8 @@ function createCustomerOrder(database, payload, businessUnit, sessionUser) {
   };
   applyPayload(created, {
     ...payload,
-    nhaXe: payload.nhaXe || customer.NhaXeMacDinh || "",
+    // Nhập giọng nói: không nói xe thì để trống (không phải đơn nào cũng gửi chành).
+    nhaXe: payload.keepEmptyTruck ? (payload.nhaXe || "") : (payload.nhaXe || customer.NhaXeMacDinh || ""),
     taxRate: payload.taxRate ?? customer.ThueSuat ?? 0,
   }, businessUnit);
   orders.push(created);
@@ -301,14 +302,14 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "POST") {
-      if (sessionUser.role === "delivery" && payload.action === "copy") {
+      if (sessionUser.role !== "manager" && payload.action === "copy") {
         return jsonResponse(403, { error: "Tài khoản giao hàng không được copy giao dịch cũ." });
       }
       if (payload.action === "bulk-create") {
         const items = Array.isArray(payload.orders) ? payload.orders : [];
         if (!items.length) return jsonResponse(400, { error: "Chưa có đơn nào để tạo." });
         if (items.length > 50) return jsonResponse(400, { error: "Chỉ được tạo tối đa 50 đơn mỗi lần." });
-        if (sessionUser.role === "delivery" && items.some((item) => item?.action === "copy")) {
+        if (sessionUser.role !== "manager" && items.some((item) => item?.action === "copy")) {
           return jsonResponse(403, { error: "Tài khoản giao hàng không được copy giao dịch cũ." });
         }
         const result = await updateDatabase((database) => {
@@ -372,3 +373,6 @@ exports.handler = async (event) => {
     return jsonResponse(400, { error: error.message });
   }
 };
+
+// Dùng lại cho luồng nhập liệu từ ảnh bàn giao.
+exports.createOrderFromPayload = createOrderFromPayload;

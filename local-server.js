@@ -13,12 +13,12 @@ const mime = {
   ".json": "application/json; charset=utf-8",
 };
 
-function readBody(req) {
+function readBody(req, limitBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
-      if (Buffer.byteLength(body) > 1024 * 1024) {
+      if (Buffer.byteLength(body) > limitBytes) {
         reject(new Error("Request body quá lớn."));
         req.destroy();
       }
@@ -28,10 +28,13 @@ function readBody(req) {
   });
 }
 
+// Ảnh bàn giao gửi dạng base64 nên cần giới hạn body lớn hơn các API khác.
+const BODY_LIMITS = { "ban-giao": 17 * 1024 * 1024, "giong-noi": 12 * 1024 * 1024 };
+
 async function handleFunction(req, res, name) {
   try {
     const mod = require(path.join(root, "backend", name));
-    const body = await readBody(req);
+    const body = await readBody(req, BODY_LIMITS[name]);
     const result = await mod.handler({
       httpMethod: req.method,
       headers: req.headers,
@@ -87,8 +90,17 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/production-info") {
     return handleFunction(req, res, "production-info");
   }
+  if (url.pathname === "/api/production-plans") {
+    return handleFunction(req, res, "production-plans");
+  }
   if (url.pathname === "/api/payments") {
     return handleFunction(req, res, "payments");
+  }
+  if (url.pathname === "/api/giong-noi") {
+    return handleFunction(req, res, "giong-noi");
+  }
+  if (url.pathname === "/api/ban-giao") {
+    return handleFunction(req, res, "ban-giao");
   }
   if (url.pathname === "/api/export-debts") {
     return handleFunction(req, res, "export-debts");
@@ -123,7 +135,7 @@ const server = http.createServer((req, res) => {
       "x-content-type-options": "nosniff",
       "x-frame-options": "DENY",
       "referrer-policy": "no-referrer",
-      "permissions-policy": "camera=(), microphone=(), geolocation=()",
+      "permissions-policy": "camera=(), microphone=(self), geolocation=()",
       "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     });
     res.end(data);

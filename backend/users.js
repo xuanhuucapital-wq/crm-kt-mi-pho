@@ -3,7 +3,7 @@ const { appendAudit, updateDatabase, readDatabase } = require("./_database");
 const { jsonResponse } = require("./_sheets");
 const { parseJsonBody } = require("./_validation");
 
-const allowedRoles = ["delivery", "manager"];
+const allowedRoles = ["delivery", "packer", "manager"];
 const allowedStatuses = ["pending", "active", "disabled"];
 const allowedBusinessUnits = ["mi", "pho"];
 

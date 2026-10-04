@@ -1,12 +1,14 @@
 const { jsonResponse, loadLocalEnv } = require("./_sheets");
+const { databaseDriver } = require("./_database");
 
-const APP_VERSION = "2026-06-21-google-oauth-export";
+const APP_VERSION = "2026-09-06-vercel-neon";
 
 exports.handler = async () => {
   loadLocalEnv();
   return jsonResponse(200, {
     ok: true,
     appVersion: APP_VERSION,
+    databaseDriver: databaseDriver(),
     googleSheetExport: {
       createsNewSpreadsheet: true,
       diagnosticErrors: true,

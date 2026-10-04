@@ -8,6 +8,10 @@
     <script>try{var _t=localStorage.getItem("nhapLieuTheme");if(_t==="dark"||(_t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches)){document.documentElement.setAttribute("data-theme","dark")}}catch(e){}</script>
     <link rel="stylesheet" href="/styles.css?v=20260630-1200" />
     <link rel="stylesheet" href="/audit.css?v=20260617-1845" />
+    <link rel="stylesheet" href="/ban-giao.css?v=20260919-2" />
+    <link rel="stylesheet" href="/giong-noi.css?v=20260917-4" />
+    <link rel="stylesheet" href="/sao-ke.css?v=20260922-1" />
+    <link rel="stylesheet" href="/production-plan.css?v=20260928-4" />
   </head>
   <body>
     <section id="loginPanel" class="login-screen">
@@ -51,10 +55,13 @@
         <nav id="mainNav">
           <button class="nav-item active" data-view="dashboard"><span>⌂</span>Tổng quan</button>
           <button class="nav-item" data-view="orders"><span>＋</span>Tạo đơn</button>
+          <button class="nav-item manager-only" data-view="banGiao"><span>▣</span>Ảnh bàn giao</button>
+          <button class="nav-item" data-view="voice"><span>🎤</span>Nhập bằng giọng nói</button>
           <button class="nav-item" data-view="ledger"><span>▤</span>Sổ dữ liệu</button>
           <button class="nav-item" data-view="customers"><span>♙</span>Khách hàng</button>
           <button class="nav-item" data-view="production"><span>⚙</span>Thông tin SX</button>
           <button class="nav-item" data-view="productionStats"><span>▥</span>Sản lượng</button>
+          <button class="nav-item manager-only" data-view="productionPlan"><span>⚒</span>Kế hoạch SX</button>
           <button class="nav-item" data-view="debts"><span>₫</span>Công nợ</button>
           <button class="nav-item" data-view="reports"><span>⌁</span>Báo cáo</button>
           <button class="nav-item" data-view="insights"><span>✦</span>Gợi ý AI</button>
@@ -159,6 +166,201 @@
           </form>
         </section>
 
+        <section id="banGiaoView" class="view">
+          <div class="page-head">
+            <div><p class="eyebrow">Nhập liệu bằng AI</p><h1>Ảnh bàn giao</h1><p>Thả ảnh tờ giao hàng vào ô chat, bấm Scan, AI báo cáo lại. Anh duyệt xong bấm Cập nhật mới ghi vào sổ.</p></div>
+            <div class="page-actions">
+              <span id="bgAiStatus" class="bg-chip">Đang kiểm tra khóa AI...</span>
+              <button id="bgToggleSettings" class="secondary-button" type="button">⚙ Cài đặt AI</button>
+            </div>
+          </div>
+          <div id="bgUnitHint" class="bg-unit-hint hidden">Luồng này được dạy riêng cho tờ giao hàng <strong>Xưởng Phở</strong>. <button id="bgSwitchPho" class="text-button" type="button">Chuyển sang Xưởng Phở</button></div>
+
+          <section id="bgSettings" class="surface bg-settings hidden">
+            <div class="bg-settings-grid">
+              <form id="bgKeyForm" class="bg-settings-block" autocomplete="off">
+                <h2>1. Khóa API OpenRouter</h2>
+                <p>Khóa được ghi vào file .env trên máy chủ. Trình duyệt không bao giờ nhận lại khóa, chỉ biết đã có hay chưa.</p>
+                <label>Dán khóa mới<input name="apiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="sk-or-v1-..." maxlength="300" required /></label>
+                <button class="primary" type="submit">🔒 Lưu khóa</button>
+              </form>
+              <div class="bg-settings-block">
+                <h2>2. Model mặc định</h2>
+                <p id="bgModelInfo">Bấm vào ô bên dưới để mở danh sách model.</p>
+                <div id="bgModelPickerDefault" class="bg-picker"></div>
+                <div class="bg-settings-actions">
+                  <button id="bgSaveModel" class="primary" type="button">Lưu model</button>
+                  <button id="bgRefreshModels" class="secondary-button" type="button">↻ Cập nhật danh sách model</button>
+                </div>
+              </div>
+            </div>
+            <div id="bgSettingsResult" class="notice bg-inner-notice" role="status"></div>
+            <details class="bg-alias-box">
+              <summary>Sổ viết tắt của shipper</summary>
+              <div class="bg-alias-wrap">
+                <form id="bgAliasForm" class="bg-alias-form">
+                  <label>Chữ trên giấy<input name="text" maxlength="100" placeholder="vd: QTB" required /></label>
+                  <label>Là khách<select name="customerCode" id="bgAliasCustomer" required></select></label>
+                  <button class="secondary-button" type="submit">＋ Thêm</button>
+                </form>
+                <div id="bgAliasList" class="bg-alias-list"></div>
+              </div>
+            </details>
+          </section>
+
+          <div class="bg-layout">
+            <section class="surface bg-side">
+              <div class="section-head"><div><h2>Ngày giao</h2><p>Ngày của tờ đang mở. Scan cả lô thì mỗi ảnh tự lấy ngày ghi trên giấy.</p></div></div>
+              <label class="bg-date-field"><input id="bgOrderDate" type="date" aria-label="Ngày giao của ảnh" /></label>
+              <div id="bgDateSuggest" class="bg-date-suggest hidden"></div>
+              <div class="section-head bg-subhead"><div><h2>Ảnh chờ nhập liệu</h2><p id="bgPendingCount"></p></div><div class="bg-pending-actions"><button id="bgScanAll" class="text-button" type="button">🔍 Scan tất cả</button><button id="bgRefresh" class="text-button" type="button">Làm mới</button></div></div>
+              <div id="bgPendingList" class="bg-pending-list"></div>
+              <div id="bgUploadResult" class="notice bg-inner-notice" role="status"></div>
+              <details class="bg-done">
+                <summary>Ảnh đã nhập gần đây</summary>
+                <ul id="bgDoneList"></ul>
+              </details>
+            </section>
+
+            <section class="surface bg-main">
+              <div class="section-head bg-read-head">
+                <div><h2>Trợ lý nhập liệu</h2><p id="bgSelectedName">Chưa chọn ảnh.</p></div>
+                <div class="bg-read-actions">
+                  <div id="bgModelPickerRun" class="bg-picker compact" title="Model dùng cho lần scan này"></div>
+                </div>
+              </div>
+
+              <div id="bgChat" class="bg-chat">
+                <div id="bgChatMessages" class="bg-chat-messages" aria-live="polite"></div>
+                <form id="bgChatForm" class="bg-chat-form">
+                  <label class="bg-attach" title="Gửi ảnh">📎<input id="bgFileInput" type="file" accept="image/jpeg,image/png,image/webp,image/*" multiple /></label>
+                  <textarea id="bgChatInput" rows="1" placeholder="Thả ảnh vào đây, hoặc nhắn: ok / dòng 3 là 5 cây / QTB là 10 cây..."></textarea>
+                  <button class="primary" type="submit" aria-label="Gửi">➤</button>
+                </form>
+              </div>
+
+              <details id="bgEditor" class="bg-editor">
+                <summary>Bảng chỉnh sửa chi tiết</summary>
+                <div id="bgEmpty" class="empty-state">Chọn hoặc gửi một ảnh để bắt đầu.</div>
+                <div id="bgWorkspace" class="bg-workspace hidden">
+                  <a id="bgPreviewLink" class="bg-preview" target="_blank" rel="noopener" title="Mở ảnh cỡ lớn"><img id="bgPreview" alt="Ảnh bàn giao đang chọn" /></a>
+                  <div class="bg-review">
+                    <div id="bgReadResult" class="notice bg-inner-notice" role="status"></div>
+                    <div id="bgDateWarning" class="bg-ai-note hidden"></div>
+                    <div id="bgAiNote" class="bg-ai-note hidden"></div>
+                    <div class="bg-review-toolbar">
+                      <span class="bg-legend">Tiền mặt ghi theo <strong>nghìn đồng</strong> như trên giấy (130 = 130.000đ). Để trống = khách nợ.</span>
+                      <button id="bgReadButton" class="secondary-button" type="button" disabled>✦ Scan lại</button>
+                      <button id="bgAddRow" class="secondary-button" type="button">＋ Thêm dòng</button>
+                    </div>
+                    <div class="table-wrap bg-table-wrap">
+                      <table class="bg-table"><thead id="bgHead"></thead><tbody id="bgRows"></tbody></table>
+                    </div>
+                    <div id="bgTotals" class="bg-totals"></div>
+                    <div class="bg-save-bar">
+                      <span id="bgSaveHint"></span>
+                      <button id="bgSaveButton" class="primary" type="button" disabled>Cập nhật vào sổ</button>
+                    </div>
+                    <div id="bgSaveResult" class="notice bg-inner-notice" role="status"></div>
+                  </div>
+                </div>
+              </details>
+            </section>
+          </div>
+        </section>
+
+        <section id="voiceView" class="view">
+          <div class="page-head">
+            <div><p class="eyebrow">Xưởng Mì · đóng hàng</p><h1>Nhập hàng bằng giọng nói</h1><p>Bấm micro, nói tên khách, xe, tiền chành và số ký. Nghe trợ lý đọc lại, đúng thì bấm Lưu.</p></div>
+            <div class="page-actions">
+              <label class="vc-date">Ngày giao<input id="vcDate" type="date" /></label>
+              <label class="vc-toggle"><input id="vcSpeak" type="checkbox" checked /> 🔊 Đọc lại</label>
+              <label class="vc-toggle" title="Đọc một loạt: ghi âm cả lượt, AI chép lời rồi nghe lại ghi âm để soát, xong mới phân tích"><input id="vcRelisten" type="checkbox" checked /> 🎧 Kiểm tra bằng ghi âm</label>
+              <label class="vc-date">Tốc độ đọc<select id="vcRate"><option value="0.85">Chậm</option><option value="1" selected>Vừa</option><option value="1.15">Nhanh</option></select></label>
+              <div class="vc-date vc-mic-pick"><span>Micro</span>
+                <div class="vc-mic-row"><select id="vcMicSelect" aria-label="Chọn micro"><option value="">Micro mặc định của máy</option></select><button id="vcMicTest" class="secondary-button" type="button" title="Nói thử để xem micro có nhận tiếng không">Thử</button></div>
+                <span id="vcMicPhone" class="vc-mic-phone hidden">📱 Micro của điện thoại</span>
+                <span class="vc-level" aria-hidden="true"><i id="vcLevel"></i></span>
+              </div>
+              <label class="vc-date">Nghe bằng<select id="vcMode"><option value="chrome">Chrome (nhanh, miễn phí)</option><option value="ai">AI nghe ghi âm (chỗ ồn)</option></select></label>
+            </div>
+          </div>
+          <details id="vcGuide" class="surface vc-guide">
+            <summary>📖 Hướng dẫn sử dụng <button id="vcGuideSpeak" class="secondary-button" type="button">🔊 Nghe hướng dẫn</button></summary>
+            <div class="vc-guide-body">
+              <ol class="vc-steps">
+                <li><strong>Nói ngày:</strong> “M67, 15 tháng 9, M67 lấy 18 ký mì” → đơn M67 ngày 15/09 (năm tự lấy năm gần nhất). Đọc một loạt mà nói ngày trước thì các khách sau dùng ngày đó. Không nói ngày thì lấy <em>Ngày giao</em> đang chọn.</li>
+                <li><strong>Nghe trước rồi mới nhập:</strong> lời bạn nói hiện ngay lên khung chat (🎙), sau đó mới có dòng <em>📝 Hiểu là: …</em> ghi rõ khách, ngày, số ký — rồi mới vào bảng.</li>
+                <li><strong>Đọc nhiều khách liền một mạch:</strong> bấm <em>📋 Đọc một loạt</em>, đọc ngắn gọn “Ngày 15 tháng 9. M67 mì 18 ký. M29 Châu Đốc xe Huệ Nghĩa, mì 39, cảo 41.” rồi bấm <em>⏹ Đọc xong</em>. Lúc đọc chỉ ghi âm (chữ nghe nhanh hiện mờ để xem, chưa phân tích). Đọc xong: AI chép lời từ ghi âm → nghe lại ghi âm để soát chữ sai → hiện bản chép lên chat → phân tích MỘT lần → dòng <em>📝 Hiểu là</em> → bảng. Trong lúc đó nút Lưu bị khóa. Xem bảng, bấm <em>✏️ Sửa</em> dòng nào sai, rồi <em>Lưu</em>.</li>
+                <li><strong>Bấm nút vàng “🗣 Bắt đầu nói chuyện”.</strong> Lần đầu máy hỏi quyền micro thì bấm <em>Cho phép</em>. Trợ lý sẽ chào và hỏi bạn.</li>
+                <li><strong>Nói từng khách theo thứ tự:</strong> tên khách (hoặc mã) → xe gì (nếu gửi xe) → tiền chành (nếu có) → mì, cảo, hoành bao nhiêu ký.</li>
+                <li><strong>Nghe trợ lý đọc lại.</strong> Mỗi khách hiện thành <strong>một dòng trong bảng</strong>. Sai thì nói lại chỗ sai, hoặc sửa thẳng trên bảng.</li>
+                <li><strong>Đúng rồi thì nói “lưu”</strong> (hoặc bấm ✅ Lưu tất cả). Đơn vào sổ, sản lượng và công nợ tự cập nhật.</li>
+                <li>Xong việc thì nói <strong>“xong rồi”</strong>.</li>
+              </ol>
+              <div class="vc-guide-grid">
+                <div><h3>Ví dụ câu nói</h3>
+                  <p>“Long Xuyên, xe Ba Nhi, chành 20, mì 28 ký, cảo 24 ký.”</p>
+                  <p>“Wiki Fresh M69, hoành 30 ký.”</p>
+                  <p>“Châu Đốc mì 36 ký, cảo 31 ký. Thanh Nguyên mì 10 ký.” <small>(nhiều khách một lượt)</small></p>
+                  <p>“Hằng mì 5 ký, thuế 8 phần trăm.”</p>
+                  <p>“M23 bốn cảo một hoành.” <small>(số đứng trước tên hàng là số ký)</small></p>
+                </div>
+                <div><h3>Câu lệnh nói</h3>
+                  <p><strong>“lưu”</strong> — lưu tất cả dòng đang chờ</p>
+                  <p><strong>“sửa Châu Đốc cảo 30 ký”</strong> — sửa một dòng</p>
+                  <p><strong>“bỏ đơn 2”</strong> / <strong>“bỏ hết”</strong> — xóa dòng / làm lại</p>
+                  <p><strong>“hướng dẫn”</strong> — trợ lý đọc cách báo</p>
+                  <p><strong>“xong rồi”</strong> — kết thúc</p>
+                </div>
+                <div><h3>Cần nhớ</h3>
+                  <p>Không nói xe, không nói chành thì để trống — không phải đơn nào cũng gửi chành.</p>
+                  <p>Thuế không nói thì theo mức mặc định của khách.</p>
+                  <p>Nói cả tên và mã khách càng chắc (“Wiki Fresh M69”).</p>
+                  <p>Micro không nghe: chọn đúng micro ở ô <em>Micro</em> rồi bấm <em>Thử</em>. Chỗ ồn thì chọn <em>Nghe bằng: AI nghe ghi âm</em>.</p>
+                  <p>Điện thoại không có nút micro trên trang: bấm vào ô chữ, dùng nút micro trên bàn phím rồi bấm Gửi.</p>
+                </div>
+              </div>
+            </div>
+          </details>
+          <details id="vcModelBox" class="surface vc-model-box hidden">
+            <summary>⚙ Model AI cho giọng nói (chỉ quản lý thấy)</summary>
+            <div class="vc-model-grid">
+              <label>🧠 Mô hình hiểu chữ <small>(tách khách, xe, số ký — cần nhanh)</small><select id="vcModel" aria-label="Mô hình hiểu chữ"></select></label>
+              <label>🎧 Mô hình nghe âm thanh <small>(nghe lại cả bản ghi — cần nghe chuẩn)</small><select id="vcListenModel" aria-label="Mô hình nghe âm thanh"></select></label>
+              <button id="vcSaveModel" class="primary" type="button">Lưu hai mô hình</button>
+            </div>
+            <p id="vcModelNote" class="vc-hint">★ = gợi ý cho giọng nói · 🎧 = nghe được ghi âm (cần cho chế độ "AI nghe ghi âm"). Giá USD / 1 triệu token (vào/ra).</p>
+          </details>
+          <div id="vcUnitHint" class="bg-unit-hint hidden">Nhập bằng giọng nói dành cho <strong>Xưởng Mì</strong>. <button id="vcSwitchMi" class="text-button" type="button">Chuyển sang Xưởng Mì</button></div>
+          <div class="vc-layout">
+            <section class="surface vc-main">
+              <div id="vcLog" class="vc-log" aria-live="polite"></div>
+              <div id="vcPending" class="vc-pending"></div>
+              <div id="vcPendingActions" class="vc-pending-actions hidden">
+                <button id="vcSaveAll" class="primary" type="button">✅ Lưu tất cả</button>
+                <button id="vcAddRow" class="secondary-button" type="button">＋ Thêm dòng</button>
+                <button id="vcClear" class="secondary-button" type="button">Xóa hết đơn chờ</button>
+              </div>
+              <div class="vc-talk-row">
+                <button id="vcTalk" class="vc-talk" type="button">🗣 Bắt đầu nói chuyện</button>
+                <button id="vcBatch" class="vc-talk vc-batch" type="button">📋 Đọc một loạt</button>
+              </div>
+              <p id="vcBatchStatus" class="vc-batch-status hidden"></p>
+              <div class="vc-input">
+                <button id="vcMic" class="vc-mic" type="button" aria-label="Bấm để nói"><span class="vc-mic-icon">🎤</span><span id="vcMicLabel">Bấm để nói</span></button>
+                <textarea id="vcText" rows="2" placeholder="Ví dụ: Long Xuyên xe Ba Nhi chành 20, mì 15 ký, cảo 3 ký"></textarea>
+                <button id="vcSend" class="primary" type="button">Gửi</button>
+              </div>
+              <p id="vcMicHint" class="vc-hint"></p>
+            </section>
+            <section class="surface vc-side">
+              <div class="section-head"><div><h2>Đơn đã lưu</h2><p id="vcSavedTitle"></p></div><button id="vcRefresh" class="text-button" type="button">Làm mới</button></div>
+              <div id="vcSaved" class="vc-saved"></div>
+            </section>
+          </div>
+        </section>
+
         <section id="ledgerView" class="view">
           <div class="page-head">
             <div><p class="eyebrow">Toàn bộ dữ liệu</p><h1>Sổ đơn hàng</h1><p id="ledgerCount">Đang tải dữ liệu...</p></div>
@@ -221,6 +423,40 @@
           <section class="surface">
             <div class="table-wrap"><table class="production-table"><thead><tr><th>Khách hàng</th><th>Liên kết CRM</th><th>Số lượng thường lấy</th><th>Hướng dẫn sản xuất</th><th>Nơi gửi</th><th></th></tr></thead><tbody id="productionTable"></tbody></table></div>
           </section>
+        </section>
+
+        <section id="productionPlanView" class="view">
+          <header class="pp-head">
+            <div class="pp-title"><p class="eyebrow">Điều hành sản xuất</p><h1>Kế hoạch SX</h1></div>
+            <div class="pp-date">
+              <button id="ppPrev" type="button" class="pp-icon" aria-label="Ngày trước">‹</button>
+              <label class="pp-date-pill"><span id="ppDateLabel">Hôm nay</span><input id="ppDate" type="date" aria-label="Chọn ngày" /></label>
+              <button id="ppNext" type="button" class="pp-icon" aria-label="Ngày sau">›</button>
+            </div>
+          </header>
+          <nav class="pp-tabs" aria-label="Chế độ xem">
+            <button type="button" data-pp-tab="batch" class="active">⚒ Xưởng</button>
+            <button type="button" data-pp-tab="customer">▣ Đóng hàng</button>
+            <button type="button" data-pp-tab="edit">✎ Sửa tay</button>
+            <button type="button" data-pp-tab="ledger">▥ Sổ sản lượng</button>
+          </nav>
+          <p id="ppNotice" class="notice"></p>
+          <section id="ppTalk" class="pp-talk">
+            <div id="ppTalkLog" class="pp-talk-log"><div class="pp-bubble ai">Bấm <b>🎤 Nói</b> rồi đọc kế hoạch, ví dụ: “Mẻ 1 cảo dày 32 ký, Châu Đốc 30, M10 2 ký gói giấy.” Tôi đọc lại, đúng thì bạn nói <b>“ok”</b> là tôi lưu.</div></div>
+            <form id="ppTypeForm" class="pp-type hidden"><input id="ppTypeInput" placeholder="Máy này chưa dùng được micro, gõ câu nói vào đây" autocomplete="off" /><button type="submit">Gửi</button></form>
+          </section>
+          <div id="ppSummary"></div>
+          <div id="ppEdit" class="hidden"></div>
+          <div id="ppByBatch"></div>
+          <div id="ppByCustomer" class="hidden"></div>
+          <div id="ppLedger" class="hidden"></div>
+          <div class="pp-bar">
+            <button id="ppPrint" type="button" class="pp-bar-print">In</button>
+            <button id="ppMic" type="button" class="pp-bar-mic" aria-label="Nói kế hoạch"><span>🎤</span><b>Nói</b></button>
+            <button id="ppSave" type="button" class="pp-bar-save" disabled>Đã lưu</button>
+          </div>
+          <datalist id="ppCustomerList"></datalist>
+          <datalist id="ppProductList"></datalist>
         </section>
 
         <section id="productionStatsView" class="view">
@@ -366,7 +602,7 @@
         <div class="section-head"><div><p class="eyebrow">Hồ sơ khách hàng</p><h2 id="profileCustomerName"></h2><p id="profileCustomerCode"></p></div><button id="closeCustomerProfile" class="icon-button" type="button" aria-label="Đóng">×</button></div>
         <div id="profileMetrics" class="profile-metrics"></div>
         <div class="profile-prices" id="profilePrices"></div>
-        <div class="profile-history-head"><div><h3>Lịch sử giao dịch</h3><p id="profileOrderCount"></p></div><div class="row-actions"><button id="profileExportSheet" class="secondary-button hidden" type="button">↗ Xuất Google Sheet</button><button id="profileExportExcel" class="secondary-button hidden" type="button">↓ Xuất Excel</button><button id="profilePayment" class="primary payment-button" type="button">₫ Ghi nhận thanh toán</button><button id="profileProductionInfo" class="secondary-button hidden" type="button">Thông tin SX</button><button id="profileCreateOrder" class="secondary-button" type="button">＋ Tạo đơn</button></div></div>
+        <div class="profile-history-head"><div><h3>Lịch sử giao dịch</h3><p id="profileOrderCount"></p></div><div class="row-actions"><button id="profileExportSheet" class="secondary-button hidden" type="button">↗ Xuất Google Sheet</button><button id="profileExportExcel" class="secondary-button hidden" type="button">↓ Xuất Excel</button><button id="profileStatement" class="secondary-button hidden" type="button">📄 Sao kê gửi khách</button><button id="profilePayment" class="primary payment-button" type="button">₫ Ghi nhận thanh toán</button><button id="profileProductionInfo" class="secondary-button hidden" type="button">Thông tin SX</button><button id="profileCreateOrder" class="secondary-button" type="button">＋ Tạo đơn</button></div></div>
         <div class="table-wrap profile-table"><table><thead><tr><th>Ngày</th><th>Mặt hàng</th><th>Tiền hàng</th><th>Thuế</th><th>Đã trả</th><th>Còn lại</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody id="profileOrders"></tbody></table></div>
         <div id="profilePayments" class="profile-payments"></div>
       </div>
@@ -488,6 +724,11 @@
         <button class="primary" type="submit" aria-label="Phân tích câu lệnh">➤</button>
       </form>
     </aside>
-    <script src="/app.js?v=20260701-1015"></script>
+    <script src="/app.js?v=20260922-1"></script>
+    <script src="/ban-giao.js?v=20260919-3"></script>
+    <script src="/giong-noi.js?v=20260917-4"></script>
+    <script src="/sao-ke.js?v=20260922-2"></script>
+    <script src="/production-plan.js?v=20260928-5"></script>
+    <div id="ppPrintArea"></div>
   </body>
 </html>

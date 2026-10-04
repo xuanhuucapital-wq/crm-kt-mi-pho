@@ -41,8 +41,22 @@ try {
       },
     },
   );
+  const plansDatabasePath = path.join(temporaryDirectory, "plans-database.json");
+  fs.copyFileSync(seedPath, plansDatabasePath);
+  const plansResult = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), "scripts", "test-production-plans.js"), plansDatabasePath],
+    { stdio: "inherit" },
+  );
+  const saoKeResult = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), "scripts", "test-sao-ke.js")],
+    { stdio: "inherit" },
+  );
   process.exitCode = [
     crmResult.status,
+    plansResult.status,
+    saoKeResult.status,
     blockedBootstrapResult.status,
     allowedBootstrapResult.status,
   ].every((status) => status === 0) ? 0 : 1;

@@ -1,17 +1,25 @@
 {
   "scripts": {
     "start": "HOST=0.0.0.0 LOCAL_ALLOW_NETWORK=true node local-server.js",
-    "local": "node local-server.js",
+    "local": "node --watch-path=backend --watch-path=local-server.js local-server.js",
+    "local:file": "CRM_DATABASE_DRIVER=file node local-server.js",
     "dev": "wrangler dev",
-    "build": "echo \"Static app ready\"",
+    "build": "node scripts/copy-vendor.js",
+    "deploy:vercel": "vercel --prod",
     "deploy:cloudflare": "wrangler deploy",
     "test": "node scripts/run-crm-tests.js",
+    "db:import:neon": "node scripts/import-crm-to-neon.js",
+    "db:check:neon": "node scripts/check-neon-crm.js",
     "db:setup:supabase": "node scripts/setup-supabase.js",
     "db:import:supabase": "node scripts/import-crm-to-supabase.js",
-    "db:check:supabase": "node scripts/check-supabase-crm.js"
+    "db:export:supabase": "node scripts/export-crm-from-supabase.js",
+    "db:check:supabase": "node scripts/check-supabase-crm.js",
+    "postinstall": "node scripts/copy-vendor.js"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "exceljs": "^4.4.0",
+    "html2canvas": "^1.4.1",
     "uuid": "11.1.1"
   },
   "overrides": {

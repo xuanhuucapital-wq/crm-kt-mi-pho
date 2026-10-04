@@ -44,7 +44,7 @@ exports.handler = async (event) => {
       .filter((item) => item.businessUnit === businessUnit)
       .sort(sortCustomers);
     const orders = (database.crm.orders || []).filter((item) => item.businessUnit === businessUnit);
-    if (sessionUser.role === "delivery") {
+    if (sessionUser.role !== "manager") {
       return jsonResponse(200, {
         customers: customers.map(deliveryCustomer),
         orders: [],

@@ -8,12 +8,16 @@ const databasePath = process.env.CRM_DATABASE_PATH
   || path.join(process.cwd(), "data", "crm-database.json");
 const seedPath = path.join(process.cwd(), "data", "crm-snapshot.json");
 const SUPABASE_STATE_ID = "main";
+const NEON_STATE_ID = "main";
 const MAX_UPDATE_RETRIES = 8;
 
 let writeQueue = Promise.resolve();
 
 const BUSINESS_UNITS = ["mi", "pho"];
 const SUPABASE_TIMEOUT_MS = 15000;
+const NEON_TIMEOUT_MS = 15000;
+
+let neonSql = null;
 
 function databaseUnavailableError(message = "Database tạm thời không phản hồi. Vui lòng thử lại.") {
   const error = new Error(message);
@@ -37,13 +41,22 @@ function normalizeText(value) {
     .trim();
 }
 
+function databaseDriver() {
+  const explicitDriver = String(process.env.CRM_DATABASE_DRIVER || "").trim().toLowerCase();
+  if (process.env.CRM_DATABASE_PATH || explicitDriver === "file") return "file";
+  if (explicitDriver === "neon") return "neon";
+  if (explicitDriver === "supabase") return "supabase";
+  if (explicitDriver) throw new Error(`CRM_DATABASE_DRIVER không hợp lệ: ${explicitDriver}`);
+  if (process.env.DATABASE_URL || process.env.POSTGRES_URL) return "neon";
+  return "file";
+}
+
+function useNeon() {
+  return databaseDriver() === "neon";
+}
+
 function useSupabase() {
-  if (process.env.CRM_DATABASE_DRIVER === "file") return false;
-  if (process.env.CRM_DATABASE_PATH) return false;
-  return Boolean(
-    process.env.SUPABASE_URL
-    && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
-  );
+  return databaseDriver() === "supabase";
 }
 
 function ensureFileDatabase() {
@@ -77,6 +90,9 @@ function normalizeDatabase(database) {
   });
   (productionInfo.entries || (productionInfo.entries = [])).forEach((entry) => {
     entry.businessUnit = normalizeBusinessUnit(entry.businessUnit);
+  });
+  (database.productionPlans || (database.productionPlans = [])).forEach((plan) => {
+    plan.businessUnit = normalizeBusinessUnit(plan.businessUnit);
   });
   database.users.forEach((user) => {
     user.businessUnits = Array.isArray(user.businessUnits) && user.businessUnits.length
@@ -179,8 +195,72 @@ async function replaceSupabaseDatabase(expectedVersion, database) {
   return nextVersion === null ? null : Number(nextVersion);
 }
 
+function neonConnectionString() {
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw databaseUnavailableError("Neon chưa có DATABASE_URL.");
+  }
+  return connectionString;
+}
+
+function getNeonSql() {
+  if (!neonSql) {
+    const { neon } = require("@neondatabase/serverless");
+    neonSql = neon(neonConnectionString());
+  }
+  return neonSql;
+}
+
+async function neonRequest(query, parameters = []) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NEON_TIMEOUT_MS);
+  try {
+    return await getNeonSql().query(query, parameters, {
+      fetchOptions: { signal: controller.signal },
+    });
+  } catch (error) {
+    if (error?.statusCode) throw error;
+    throw databaseUnavailableError(
+      error?.name === "AbortError"
+        ? "Database phản hồi quá lâu. Vui lòng thử lại."
+        : "Không kết nối được Neon. Vui lòng thử lại.",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readNeonDatabase() {
+  const rows = await neonRequest(
+    "SELECT data, version FROM crm_state WHERE id = $1 LIMIT 1",
+    [NEON_STATE_ID],
+  );
+  if (!Array.isArray(rows) || !rows[0]?.data) {
+    throw new Error("Neon chưa có dữ liệu CRM. Hãy chạy npm run db:import:neon trước.");
+  }
+  const data = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
+  return {
+    database: normalizeDatabase(data),
+    version: Number(rows[0].version || 0),
+  };
+}
+
+async function replaceNeonDatabase(expectedVersion, database) {
+  const rows = await neonRequest(
+    `UPDATE crm_state
+      SET data = CAST($3 AS jsonb), version = version + 1, updated_at = NOW()
+      WHERE id = $1 AND version = $2
+      RETURNING version`,
+    [NEON_STATE_ID, expectedVersion, JSON.stringify(database)],
+  );
+  return Array.isArray(rows) && rows[0] ? Number(rows[0].version) : null;
+}
+
 async function readDatabaseSnapshot() {
-  return useSupabase() ? readSupabaseDatabase() : readFileDatabase();
+  const driver = databaseDriver();
+  if (driver === "neon") return readNeonDatabase();
+  if (driver === "supabase") return readSupabaseDatabase();
+  return readFileDatabase();
 }
 
 async function readDatabase() {
@@ -194,11 +274,14 @@ async function updateDatabase(mutator) {
       const result = await mutator(database);
       recalculate(database);
       database.updatedAt = new Date().toISOString();
-      if (!useSupabase()) {
+      const driver = databaseDriver();
+      if (driver === "file") {
         writeFileDatabase(database);
         return result;
       }
-      const nextVersion = await replaceSupabaseDatabase(version, database);
+      const nextVersion = driver === "neon"
+        ? await replaceNeonDatabase(version, database)
+        : await replaceSupabaseDatabase(version, database);
       if (nextVersion !== null) return result;
     }
     throw new Error("Dữ liệu vừa được người khác cập nhật. Vui lòng thử lại.");
@@ -306,6 +389,7 @@ function appendAudit(database, entry) {
 
 module.exports = {
   appendAudit,
+  databaseDriver,
   nextId,
   normalizeBusinessUnit,
   normalizeOrder,
@@ -313,5 +397,6 @@ module.exports = {
   readDatabase,
   recalculate,
   updateDatabase,
+  useNeon,
   useSupabase,
 };

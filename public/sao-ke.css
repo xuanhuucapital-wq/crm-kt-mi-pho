@@ -1,0 +1,62 @@
+/* Sao kê gửi khách: tờ sao kê luôn nền trắng, rộng cố định 420px để vừa màn hình điện thoại khi gửi Zalo. */
+.statement-dialog{width:min(560px,100vw);max-height:calc(100vh - 24px);display:none;flex-direction:column;overflow:hidden}
+.statement-dialog[open]{display:flex}
+.statement-toolbar{display:grid;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.statement-toolbar-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.statement-toolbar-row .icon-button{color:var(--ink)}
+.statement-range{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.statement-range label,.statement-settings label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.statement-actions{display:flex;flex-wrap:wrap;gap:8px}
+.statement-actions button{padding:8px 12px}
+.statement-settings{display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:6px}
+.statement-settings.hidden{display:none}
+.statement-settings-actions{display:flex;justify-content:space-between;align-items:center}
+.statement-settings small{color:var(--muted)}
+.statement-toolbar .notice:not(.show){display:none}
+.statement-stage{overflow:auto;padding:16px 0;background:#e9ecea;flex:1}
+[data-theme="dark"] .statement-stage{background:#0b130f}
+
+.statement-sheet{width:420px;margin:0 auto;background:#fff;color:#1d2622;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.3;box-shadow:0 6px 24px rgba(0,0,0,.12);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.sk-head{padding:16px 16px 12px;text-align:center;border-bottom:2px solid #1d2622}
+.sk-shop{font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.sk-title{font-size:11px;color:#6b7570;letter-spacing:.12em;margin-top:2px}
+.sk-customer{font-size:17px;font-weight:700;margin-top:10px}
+.sk-range{font-size:12px;color:#6b7570;margin-top:2px}
+.sk-debt-label{margin-top:12px;font-size:12px;font-weight:700;color:#c62828;letter-spacing:.1em}
+.sk-debt{font-size:30px;font-weight:800;color:#c62828;line-height:1.15}
+.sk-debt-note{font-size:11px;color:#6b7570}
+.sk-body{padding:4px 12px 8px}
+.sk-month-title{margin-top:8px;padding:4px 4px 2px;font-size:12px;font-weight:700;color:#4a5550;border-bottom:1px solid #d9dfdc}
+.sk-row{display:flex;align-items:center;gap:8px;min-height:22px;padding:0 4px;border-bottom:1px dotted #e3e7e5}
+.sk-date{flex:0 0 38px;color:#6b7570;font-variant-numeric:tabular-nums}
+.sk-item{flex:1;min-width:0}
+.sk-amount{flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.sk-paid{background:#e8f5ec;color:#1b7a3d}
+.sk-paid .sk-date{color:#1b7a3d}
+.sk-month-total{display:flex;gap:8px;min-height:22px;align-items:center;padding:0 4px;background:#f2f4f3;font-weight:700}
+.sk-month-total span:first-child{flex:1}
+.sk-month-total span:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.sk-empty{padding:24px 4px;text-align:center;color:#6b7570}
+.sk-foot{padding:10px 16px 16px;border-top:2px solid #1d2622}
+.sk-sum{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-variant-numeric:tabular-nums}
+.sk-sum-paid strong{color:#1b7a3d}
+.sk-sum-debt{margin-top:4px;padding-top:6px;border-top:1px solid #d9dfdc;font-size:16px}
+.sk-sum-debt strong{color:#c62828;font-size:18px}
+.sk-pay{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px;border:1px dashed #b9c2be;border-radius:6px}
+.sk-bank{flex:1;white-space:pre-line;font-size:13px;font-weight:600}
+.sk-qr{width:120px;height:auto;flex:0 0 120px}
+.sk-pay-empty{color:#8a938f;font-size:12px}
+
+@media(max-width:560px){.statement-dialog{width:100vw;height:100vh;max-height:none;border-radius:0}.statement-stage{padding:0}.statement-sheet{box-shadow:none}}
+
+@media print{
+  @page{margin:10mm}
+  body.statement-printing>*:not(#statementDialog){display:none!important}
+  body.statement-printing{background:#fff!important}
+  body.statement-printing #statementDialog{display:block!important;position:static;width:auto;max-width:none;max-height:none;overflow:visible;box-shadow:none;border:0;padding:0;background:#fff}
+  body.statement-printing #statementDialog::backdrop{display:none}
+  body.statement-printing .statement-toolbar{display:none!important}
+  body.statement-printing .statement-stage{overflow:visible;padding:0;background:#fff}
+  body.statement-printing .statement-sheet{box-shadow:none;margin:0 auto;zoom:1!important}
+  .sk-row,.sk-month-total{break-inside:avoid}
+}

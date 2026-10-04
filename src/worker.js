@@ -6,6 +6,7 @@ import customersFunction from "../backend/customers.js";
 import ordersFunction from "../backend/orders.js";
 import paymentsFunction from "../backend/payments.js";
 import productionInfoFunction from "../backend/production-info.js";
+import productionPlansFunction from "../backend/production-plans.js";
 import usersFunction from "../backend/users.js";
 import auditLogFunction from "../backend/audit-log.js";
 import exportDebtsFunction from "../backend/export-debts.js";
@@ -24,6 +25,7 @@ const apiRoutes = {
   "/api/orders": ordersFunction.handler,
   "/api/payments": paymentsFunction.handler,
   "/api/production-info": productionInfoFunction.handler,
+  "/api/production-plans": productionPlansFunction.handler,
   "/api/users": usersFunction.handler,
   "/api/audit-log": auditLogFunction.handler,
   "/api/export-debts": exportDebtsFunction.handler,
@@ -37,7 +39,7 @@ const apiRoutes = {
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  "permissions-policy": "camera=(), microphone=(self), geolocation=()",
   "referrer-policy": "no-referrer",
   "strict-transport-security": "max-age=31536000; includeSubDomains",
   "cross-origin-opener-policy": "same-origin",

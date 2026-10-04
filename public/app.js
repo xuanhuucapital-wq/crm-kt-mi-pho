@@ -489,7 +489,8 @@ function renderAuth() {
   if (!allowedUnits.includes(state.businessUnit)) state.businessUnit = allowedUnits[0] || "mi";
   applyBusinessUnitUi();
   $("#userName").textContent = state.user.displayName || state.user.email;
-  $("#userRole").textContent = isManager ? "Quản lý" : "Giao hàng";
+  const isPacker = state.user.role === "packer";
+  $("#userRole").textContent = isManager ? "Quản lý" : isPacker ? "Đóng hàng · giọng nói" : "Giao hàng";
   $("#userAvatar").textContent = (state.user.displayName || state.user.email || "A").slice(0, 1).toUpperCase();
   $("#userEmail").value = state.user.email;
   $("#addCustomerButton").classList.toggle("hidden", !isManager);
@@ -497,14 +498,15 @@ function renderAuth() {
   $("#addProductionInfo").classList.toggle("hidden", !isManager);
   $("#syncProductionCustomers").classList.toggle("hidden", !isManager);
   $$(".nav-item").forEach((button) => {
-    const deliveryAllowed = button.dataset.view === "orders";
+    const deliveryAllowed = isPacker ? button.dataset.view === "voice" : button.dataset.view === "orders";
     button.classList.toggle("hidden", !isManager && !deliveryAllowed);
   });
-  if (!isManager) switchView("orders");
+  if (!isManager) switchView(isPacker ? "voice" : "orders");
 }
 
 function switchView(name) {
   if (state.user?.role === "delivery" && name !== "orders") name = "orders";
+  if (state.user?.role === "packer" && name !== "voice") name = "voice";
   if (name === "reports") resetReportToLast30Days();
   if (name === "productionStats") resetProductionStatsToLast30Days();
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === `${name}View`));
@@ -625,7 +627,7 @@ function renderUsers() {
     const access = user.businessUnits || ["mi", "pho"];
     return `<tr data-user-id="${user.id}">
       <td><div class="user-identity"><strong>${escapeHtml(user.displayName)}</strong><small>${escapeHtml(user.email)}</small></div></td>
-      <td><select class="user-role-select"><option value="delivery" ${user.role === "delivery" ? "selected" : ""}>Giao hàng</option><option value="manager" ${user.role === "manager" ? "selected" : ""}>Quản lý</option></select></td>
+      <td><select class="user-role-select"><option value="delivery" ${user.role === "delivery" ? "selected" : ""}>Giao hàng</option><option value="packer" ${user.role === "packer" ? "selected" : ""}>Đóng hàng (giọng nói)</option><option value="manager" ${user.role === "manager" ? "selected" : ""}>Quản lý</option></select></td>
       <td><select class="user-status-select"><option value="pending" ${user.status === "pending" ? "selected" : ""}>Chờ duyệt</option><option value="active" ${user.status === "active" ? "selected" : ""}>Hoạt động</option><option value="disabled" ${user.status === "disabled" ? "selected" : ""}>Đã khóa</option></select></td>
       <td><div class="unit-permissions"><label><input class="user-unit-input" type="checkbox" value="mi" ${access.includes("mi") ? "checked" : ""}/> Mì</label><label><input class="user-unit-input" type="checkbox" value="pho" ${access.includes("pho") ? "checked" : ""}/> Phở</label></div></td>
       <td>${formatDate(String(user.createdAt || "").slice(0, 10))}</td>
@@ -1075,6 +1077,7 @@ function openCustomerProfile(code, historicalName = "") {
   $("#profilePayments").innerHTML = payments.length
     ? `<h3>Thanh toán đã ghi nhận khi test CRM</h3>${payments.map((payment) => `<div><span>${formatDate(payment.date)} · ${escapeHtml(payment.note || "Không ghi chú")}</span><strong>${money.format(payment.amount)}</strong></div>`).join("")}`
     : "";
+  window.saoKeUi?.syncProfileButton();
   if (!$("#customerProfileDialog").open) $("#customerProfileDialog").showModal();
 }
 

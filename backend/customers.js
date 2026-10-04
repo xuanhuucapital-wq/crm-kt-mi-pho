@@ -58,7 +58,7 @@ exports.handler = async (event) => {
         normalizeBusinessUnit(item.businessUnit) === businessUnit
       )).sort(sortCustomers);
       return jsonResponse(200, {
-        customers: sessionUser.role === "delivery"
+        customers: sessionUser.role !== "manager"
           ? customers.map(deliveryCustomer)
           : customers,
       });
